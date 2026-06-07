@@ -74,7 +74,12 @@ threshold $\eps^\star$ above which the reward-maximizing response is a manipulat
 fraction satisfies $\eps<\alpha$ and a margin condition holds (Lemma~\ref{lem:rank}). Together
 these give a welfare-consistency theorem for robust RLDF (Theorem~\ref{thm:main}), with RLVR as
 the special case of a single consumer, a deterministic world, and a perfect verifier
-(Proposition~\ref{prop:rlvr}, Corollary~\ref{cor:rlvr}).
+(Proposition~\ref{prop:rlvr}, Corollary~\ref{cor:rlvr}). We then relax exact calibration to an
+$\eta$-approximate hypothesis (Theorem~\ref{thm:approxcalib}), reduce the welfare regret of the
+training loop to the reward error and expose the irreducible floor that the trimming and
+contamination penalties leave behind (Theorem~\ref{thm:regret}), and lift the per-query result to
+a per-distribution welfare-regret bound (Theorem~\ref{thm:dist}) whose contamination threshold
+$\eps<\alpha$ we show is sharp (Proposition~\ref{prop:sharp}).
 \end{abstract}
 
 
@@ -125,8 +130,11 @@ stronger type-aware adversary is blocked by grading on representative panels, wh
 the finding of \cite{williams} that a small gameable minority suffices to induce manipulation.
 Section~\ref{sec:robust} replaces the mean by a trimmed mean and recovers the welfare ranking
 under $\eps<\alpha$ and a margin condition. Section~\ref{sec:mainthm} assembles these into
-Theorem~\ref{thm:main}, and Sections~\ref{sec:discussion}--\ref{sec:related} discuss the
-assumptions and the relation to prior work.
+Theorem~\ref{thm:main}. Sections~\ref{sec:approxcalib}--\ref{sec:distributional} then extend the
+guarantee in three directions: to approximate calibration, to the regret of the training loop, and
+to a per-distribution welfare bound with a matching sharpness result on the contamination
+threshold. Sections~\ref{sec:discussion}--\ref{sec:related} discuss the assumptions and the
+relation to prior work.
 
 
 \section{Setup and notation}
@@ -657,6 +665,217 @@ $\Wbar^\star>\Wbar(x,a')$ is correctness of $a^\star$ over $a'$.
 \end{proof}
 
 
+\section{Welfare-consistency under approximate calibration}
+\label{sec:approxcalib}
+
+Theorem~\ref{thm:main} assumes the simulate-then-evaluate pipeline is \emph{exactly} unbiased for
+welfare on the faithful mass (Assumption~\ref{ass:calib}). Real graders are not exactly
+calibrated; learned reward models are in fact systematically overconfident
+\cite{rewardcalib}. We show the guarantee degrades gracefully and we pin down how much
+miscalibration it tolerates.
+
+\begin{assumption}[$\eta$-approximate calibration]
+\label{ass:approxcalib}
+There is $\eta\ge0$ such that, for every faithful type $u$ and every $(x,a)$,
+$\bigl|\rho(x,u,a)-W(x,u,a)\bigr|\le\eta$.
+\end{assumption}
+
+Under Assumption~\ref{ass:approxcalib} the clean faithful-grade mean is within $\eta$ of welfare:
+$\bigl|\mathrm{mean}(F_a)-\Wbar(x,a)\bigr|=\bigl|\E_{u\sim P_{\mathrm f}}[\rho(x,u,a)-W(x,u,a)]\bigr|\le\eta$.
+Carrying this one extra bias term through the chain of Lemma~\ref{lem:rank} costs $2\eta$ in the
+margin.
+
+\begin{theorem}[Consistency under approximate calibration]
+\label{thm:approxcalib}
+In the setting of Theorem~\ref{thm:main} with Assumption~\ref{ass:calib} replaced by
+$\eta$-approximate calibration (Assumption~\ref{ass:approxcalib}), if for every welfare-suboptimal
+$a'\in\Ac_c$
+\[
+  \Wbar(x,a^\star)-\Wbar(x,a')\;>\;4\alpha+\frac{2\eps}{1-2\alpha}+2s+2\eta,
+\]
+then with probability at least $1-\delta$ (same panel size as \textup{(A4)}) the $\alpha$-trimmed
+reward $\hat\mu_\alpha^{(n)}$ is welfare-consistent on $\Ac_c$. The condition is sufficient; the
+$2\eta$ term is necessary in the sense of Proposition~\ref{prop:calibtight} below.
+\end{theorem}
+
+\begin{proof}
+Repeat the proof of Lemma~\ref{lem:rank} with one additional term. For the clean law $F_a$,
+$|\mu_\alpha(F_a)-\Wbar(x,a)|\le|\mu_\alpha(F_a)-\mathrm{mean}(F_a)|+|\mathrm{mean}(F_a)-\Wbar(x,a)|\le2\alpha+\eta$
+by Lemma~\ref{lem:three}(i) and Assumption~\ref{ass:approxcalib}. Hence, chaining the sampling and
+contamination bounds of Lemma~\ref{lem:three} exactly as before,
+\[
+  \hat\mu_\alpha^{(n)}(a^\star)\ge\Wbar^\star-2\alpha-\eta-\tfrac{\eps}{1-2\alpha}-s,
+  \qquad
+  \hat\mu_\alpha^{(n)}(a')\le\Wbar(x,a')+2\alpha+\eta+\tfrac{\eps}{1-2\alpha}+s,
+\]
+so their difference is at least $M-4\alpha-\frac{2\eps}{1-2\alpha}-2s-2\eta>0$ under the stated
+margin. The union bound over $\Ac_c$ is identical to Theorem~\ref{thm:main}.
+\end{proof}
+
+\begin{proposition}[Tightness of the calibration term]
+\label{prop:calibtight}
+The dependence on $\eta$ cannot be removed. Even with $\alpha=0$, $\eps=0$, and an infinite panel
+($s=0$), there exist a query and a candidate pair $\{a^\star,a'\}$ with
+$\Wbar(x,a^\star)-\Wbar(x,a')=M$ and an $\eta$-approximately-calibrated grader for which the
+\textup{(exact)} reward ranks $a'$ strictly above $a^\star$ whenever $\eta\ge M/2$.
+\end{proposition}
+
+\begin{proof}
+With $\alpha=\eps=s=0$ the reward is the exact faithful mean
+$\hat\mu_\alpha^{(n)}(a)=\mathrm{mean}(F_a)$, which Assumption~\ref{ass:approxcalib} pins only to
+$[\Wbar(x,a)-\eta,\Wbar(x,a)+\eta]$. Choose a grader with
+$\mathrm{mean}(F_{a^\star})=\Wbar(x,a^\star)-\eta$ and
+$\mathrm{mean}(F_{a'})=\Wbar(x,a')+\eta$; both are admissible. The reward gap is then
+$(\Wbar^\star-\eta)-(\Wbar(x,a')+\eta)=M-2\eta$, which is $\le0$ once $\eta\ge M/2$, so $a'$ is
+weakly preferred while being welfare-inferior.
+\end{proof}
+
+\section{Regret of the training loop}
+\label{sec:regret}
+
+The results so far bound the reward at a fixed query and certify that its maximizer over a
+candidate set is welfare-optimal. We now lift this to the policy an optimizer actually returns,
+and isolate the part of the welfare gap that no amount of optimization removes.
+
+Let $\Pi$ be the policy class the optimizer searches (for instance the set reachable by the
+training algorithm from the base model). For $\pi\in\Pi$ write the true welfare value and the
+empirical robust-reward value
+\[
+  V^\star(\pi)\;=\;\E_{x\sim\Dc}\,\E_{a\sim\pi(\cdot\given x)}\big[\Wbar(x,a)\big],
+  \qquad
+  \widehat V(\pi)\;=\;\E_{x\sim\Dc}\,\E_{a\sim\pi(\cdot\given x)}\big[\hat\mu_\alpha^{(n)}(x,a)\big],
+\]
+where $\hat\mu_\alpha^{(n)}(x,a)$ is the $\alpha$-trimmed empirical market reward at $x$. Let
+$\pi^\star\in\argmax_{\pi\in\Pi}V^\star(\pi)$ be the welfare-optimal policy \emph{within the
+class}. Collecting the four error sources of the preceding sections gives a uniform reward error:
+on the high-probability event that every panel deviates by at most its sampling tolerance,
+\[
+  \bigl|\hat\mu_\alpha^{(n)}(x,a)-\Wbar(x,a)\bigr|\;\le\;b
+  \;\defeq\;\underbrace{2\alpha}_{\text{trimming}}
+  +\underbrace{\tfrac{\eps}{1-2\alpha}}_{\text{contamination}}
+  +\underbrace{\eta}_{\text{calibration}}
+  +\underbrace{s_n}_{\text{sampling}},
+  \qquad s_n=\tfrac{1}{1-2\alpha}\sqrt{\tfrac{1}{2n}\log\tfrac{2}{\delta'}},
+\]
+by Lemma~\ref{lem:three}(i)--(iii) and Assumption~\ref{ass:approxcalib}, with $\delta'$ allocated
+across panels by a union bound.
+
+\begin{theorem}[Reward error to welfare regret]
+\label{thm:regret}
+Suppose $\bigl|\hat\mu_\alpha^{(n)}(x,a)-\Wbar(x,a)\bigr|\le b$ for all $(x,a)$ in the support of
+the candidate sets, so that $|\widehat V(\pi)-V^\star(\pi)|\le b$ for all $\pi\in\Pi$. If $\hat\pi$
+is an $\eps_{\mathrm{opt}}$-approximate maximizer of $\widehat V$ over $\Pi$, that is
+$\widehat V(\hat\pi)\ge\sup_{\pi\in\Pi}\widehat V(\pi)-\eps_{\mathrm{opt}}$, then
+\[
+  V^\star(\hat\pi)\;\ge\;V^\star(\pi^\star)\;-\;2b\;-\;\eps_{\mathrm{opt}}.
+\]
+\end{theorem}
+
+\begin{proof}
+The pointwise bound gives $|\widehat V(\pi)-V^\star(\pi)|\le b$ by taking expectations over
+$x\sim\Dc$ and $a\sim\pi$. Then
+\[
+  V^\star(\hat\pi)\;\ge\;\widehat V(\hat\pi)-b
+  \;\ge\;\sup_{\pi\in\Pi}\widehat V(\pi)-\eps_{\mathrm{opt}}-b
+  \;\ge\;\widehat V(\pi^\star)-\eps_{\mathrm{opt}}-b
+  \;\ge\;V^\star(\pi^\star)-2b-\eps_{\mathrm{opt}}. \qedhere
+\]
+\end{proof}
+
+\begin{remark}[KL-regularized optimizer]
+\label{rem:kl}
+Practical RLHF and GRPO maximize a KL-regularized objective
+$J_\beta(\pi)=\widehat V(\pi)-\beta\,\mathrm{KL}(\pi\,\|\,\pi_{\mathrm{ref}})$ against a reference
+policy $\pi_{\mathrm{ref}}$. Its maximizer $\hat\pi_\beta$ is not the $\widehat V$-maximizer, so the
+clean reduction acquires one explicit regularization term. From
+$J_\beta(\hat\pi_\beta)\ge J_\beta(\pi^\star)$ and $\mathrm{KL}(\hat\pi_\beta\,\|\,\pi_{\mathrm{ref}})\ge0$,
+\[
+  V^\star(\hat\pi_\beta)\;\ge\;V^\star(\pi^\star)\;-\;2b\;-\;\beta\,\mathrm{KL}(\pi^\star\,\|\,\pi_{\mathrm{ref}}),
+\]
+so regularization costs at most $\beta\,\mathrm{KL}(\pi^\star\,\|\,\pi_{\mathrm{ref}})$ and vanishes as
+$\beta\to0$. The optimization term $\eps_{\mathrm{opt}}$ is what a convergence analysis of the
+policy-gradient step under a biased reward oracle controls \cite{biasedpg}.
+\end{remark}
+
+\begin{remark}[Which part of the floor is irreducible]
+\label{rem:floor}
+As the panel grows ($s_n\to0$) and the optimizer converges ($\eps_{\mathrm{opt}}\to0$), the bound
+stalls at $2\bigl(2\alpha+\tfrac{\eps}{1-2\alpha}+\eta\bigr)$. The contamination and calibration
+parts of this floor are not an artifact of the analysis: Proposition~\ref{prop:calibtight}
+($\eta\ge M/2$) and Proposition~\ref{prop:sharp} ($\eps\ge\alpha$) exhibit instances on which the
+robust reward genuinely mis-ranks by those amounts, so a reward-driven optimizer is steered into
+the corresponding welfare loss. The trimming part is a worst-case bound on the estimand shift and
+is the one term that improves under grade concentration, to $O(\alpha\sigma)$, by the remark
+following Lemma~\ref{lem:three}.
+\end{remark}
+
+\section{From per-query to per-distribution guarantees}
+\label{sec:distributional}
+
+Theorems~\ref{thm:main} and~\ref{thm:approxcalib} hold at a fixed query and certify consistency on
+its candidate set. We now give a guarantee over the query distribution $\Dc$ and identify the
+regime in which no guarantee is possible.
+
+For a query $x$ let the welfare margin be
+$M(x)=\Wbar(x,a^\star(x))-\max_{a'\notin\Ac^\star(x)}\Wbar(x,a')$, the gap between the best and the
+best suboptimal candidate (set $M(x)=\infty$ if every candidate is optimal). Queries with a small
+margin are the ones a sampled reward cannot resolve, so the right structural assumption is a bound
+on how much $\Dc$-mass sits near zero margin.
+
+\begin{theorem}[Per-distribution welfare regret]
+\label{thm:dist}
+Let $\hat a$ select $\argmax_{a\in\Ac_c(x)}\hat\mu_\alpha^{(n)}(x,a)$ at each $x$, under the
+per-query conditions of Theorem~\ref{thm:approxcalib} with penalty
+$p=4\alpha+\frac{2\eps}{1-2\alpha}+2s+2\eta$ and per-query failure probability at most $\delta$.
+Suppose a margin-distribution bound $\Prob_{x\sim\Dc}(M(x)<\tau)\le\psi(\tau)$ holds for a
+nondecreasing $\psi:[0,\infty)\to[0,1]$. Then the $\Dc$-expected welfare regret obeys
+\[
+  \E_{x\sim\Dc}\bigl[\Wbar(x,a^\star(x))-\Wbar(x,\hat a(x))\bigr]\;\le\;\psi(p)+\delta.
+\]
+\end{theorem}
+
+\begin{proof}
+Fix $x$. If $M(x)>p$ and the panels at $x$ succeed, an event of probability at least $1-\delta$,
+then Theorem~\ref{thm:approxcalib} gives $\hat a(x)\in\Ac^\star(x)$ and the per-query regret is $0$.
+Otherwise the per-query regret is at most the welfare range, which is $1$ because $W\in[0,1]$. The
+bad set is contained in $\{M(x)\le p\}\cup\{\text{panel fails}\}$, of probability at most
+$\psi(p)+\delta$. Taking expectations and bounding the regret by $1$ on the bad set gives the
+claim.
+\end{proof}
+
+As the penalty $p\to0$ the bound tends to $\psi(0^+)+\delta$, so when the margin density has no
+atom at zero and the panels are large, the robust-argmax policy is welfare-optimal for
+$\Dc$-almost every query. The next proposition shows the contamination condition $\eps<\alpha$ of
+Theorem~\ref{thm:main} is exactly the boundary of what any trimmed-mean reward can promise.
+
+\begin{proposition}[Sharpness of the $\eps<\alpha$ threshold]
+\label{prop:sharp}
+Fix $\alpha\in(0,\tfrac12)$. For every $\eps>\alpha$ there is an $\eps$-contaminated instance, a
+query with two candidates of positive welfare gap, on which the $\alpha$-trimmed empirical reward
+ranks the manipulation strictly above the welfare-optimal response for \emph{every} panel size
+$n$. Hence no panel size restores consistency once $\eps\ge\alpha$, and the condition $\eps<\alpha$
+cannot be relaxed for the trimmed-mean aggregator.
+\end{proposition}
+
+\begin{proof}
+Let $a^\star$ be welfare-optimal with all clean grades at a value $w^\star\in(0,1)$, so
+$\hat\mu_\alpha^{(n)}(a^\star)=w^\star$ for every $n$. Let $a^\dagger$ be a manipulation whose
+gameable fraction $\eps>\alpha$ places its grades at the ceiling $1$ and whose remaining
+$(1-\eps)$ faithful grades sit at $0$, so its grade law has quantile function $F^{-1}(p)=0$ for
+$p<1-\eps$ and $F^{-1}(p)=1$ for $p\ge1-\eps$. Its $\alpha$-trimmed functional is
+\[
+  \mu_\alpha(F)=\frac{1}{1-2\alpha}\int_\alpha^{1-\alpha}F^{-1}(p)\,dp=\frac{\eps-\alpha}{1-2\alpha},
+\]
+because the retained range $[\alpha,1-\alpha]$ still contains an $(\eps-\alpha)$ mass of ceiling
+grades that trimming the top $\alpha$ does not remove. This value is independent of $n$ and exceeds
+$w^\star$ whenever $w^\star<(\eps-\alpha)/(1-2\alpha)$, which is achievable since the right-hand
+side is positive for $\eps>\alpha$. For any such instance the manipulation outranks the optimum at
+every $n$, although $\Wbar(x,a^\star)=w^\star>\Wbar(x,a^\dagger)=(1-\eps)\cdot0+\eps\cdot w_g$ for a
+manipulation with true gameable-welfare $w_g$ small. The breakdown point of the $\alpha$-trimmed
+mean is therefore $\alpha$, matching the sufficient condition of Theorem~\ref{thm:main}.
+\end{proof}
+
+
 \section{Scope of the assumptions}
 \label{sec:discussion}
 
@@ -735,6 +954,28 @@ Remark~\ref{rem:target}, with representative panels and trimming as the counterm
 misalignment under competition for audiences \cite{moloch} and deceptive policies that persist
 through safety training \cite{sleeper} are the qualitative hazards the calibration discussion of
 Section~\ref{sec:discussion} keeps in view.
+
+\paragraph{Robust aggregation and Byzantine-robust learning.}
+The trimmed-mean reward of Section~\ref{sec:robust} imports a tool from robust statistics
+\cite{lugosimendelson} and from Byzantine-robust distributed learning, where coordinate-wise
+trimmed means attain optimal statistical rates while tolerating a corrupt minority below the
+breakdown point \cite{yin}. The transfer is exact: a gameable subpopulation plays the role of
+Byzantine workers, and the condition $\eps<\alpha$ of Theorem~\ref{thm:main} is the breakdown point
+turned into a training guarantee, with the matching converse of Proposition~\ref{prop:sharp}. What
+is new is not the aggregator but the object it aggregates, the realized welfare of a consumer
+population, and the coupling of the breakdown threshold to a welfare-consistency statement.
+
+\paragraph{Decision-focused learning and social choice.}
+Grading the realized outcome of acting on a response, rather than the response, is the
+decision-focused-learning idea \cite{spo} carried into RLHF: the loss is the regret of the
+decision a prediction induces, not the prediction error. RLDF supplies the pieces that idea needs
+for a language model, a simulated decision environment and a population over which the regret is
+taken. The aggregation step is also a social-choice rule over a heterogeneous population
+\cite{conitzer}, and the welfare target $J^\star=\E_{u\sim P}[W]$ is its utilitarian aggregate;
+population-proportional alignment \cite{popalign} matches the policy to the evaluator distribution,
+whereas RLDF asks only for the weaker ranking-consistency an optimizer needs. Foresight preference
+optimization is, by contrast, subject to reward-model overoptimization \cite{overopt}, the Goodhart
+failure that consequence-grading is meant to sidestep.
 
 \paragraph{Market and multi-agent framings.}
 Simulated consumer populations appear in economic LLM sandboxes \cite{malles} and
@@ -858,6 +1099,41 @@ J.~S.~Park, J.~C.~O'Brien, C.~J.~Cai, M.~R.~Morris, P.~Liang, M.~S.~Bernstein.
 R.~Rafailov, A.~Sharma, E.~Mitchell, S.~Ermon, C.~D.~Manning, C.~Finn.
 \newblock Direct Preference Optimization: Your Language Model is Secretly a Reward Model.
 \newblock arXiv:2305.18290, 2023. \url{https://arxiv.org/abs/2305.18290}.
+
+\bibitem{rewardcalib}
+J.~Leng, C.~Huang, B.~Zhu, J.~Huang.
+\newblock Taming Overconfidence in LLMs: Reward Calibration in RLHF.
+\newblock arXiv:2410.09724, 2024. \url{https://arxiv.org/abs/2410.09724}.
+
+\bibitem{biasedpg}
+S.~Mu, D.~Klabjan.
+\newblock On the Second-Order Convergence of Biased Policy Gradient Algorithms.
+\newblock arXiv:2311.02546, 2023. \url{https://arxiv.org/abs/2311.02546}.
+
+\bibitem{yin}
+D.~Yin, Y.~Chen, K.~Ramchandran, P.~Bartlett.
+\newblock Byzantine-Robust Distributed Learning: Towards Optimal Statistical Rates.
+\newblock ICML 2018. arXiv:1803.01498. \url{https://arxiv.org/abs/1803.01498}.
+
+\bibitem{popalign}
+K.~Kim, J.~Zhang, A.~Ozdaglar, P.~A.~Parrilo.
+\newblock Beyond RLHF and NLHF: Population-Proportional Alignment under an Axiomatic Framework.
+\newblock arXiv:2506.05619, 2025. \url{https://arxiv.org/abs/2506.05619}.
+
+\bibitem{conitzer}
+V.~Conitzer, R.~Freedman, J.~Heitzig, W.~H.~Holliday, B.~M.~Jacobs, et al.
+\newblock Social Choice Should Guide AI Alignment in Dealing with Diverse Human Feedback.
+\newblock ICML 2024. arXiv:2404.10271. \url{https://arxiv.org/abs/2404.10271}.
+
+\bibitem{spo}
+A.~N.~Elmachtoub, P.~Grigas.
+\newblock Smart ``Predict, then Optimize''.
+\newblock \emph{Management Science} 68(1):9--26, 2022. arXiv:1710.08005. \url{https://arxiv.org/abs/1710.08005}.
+
+\bibitem{overopt}
+L.~Gao, J.~Schulman, J.~Hilton.
+\newblock Scaling Laws for Reward Model Overoptimization.
+\newblock ICML 2023. arXiv:2210.10760. \url{https://arxiv.org/abs/2210.10760}.
 
 \bibitem{hoeffding}
 W.~Hoeffding.
