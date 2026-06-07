@@ -103,9 +103,9 @@ The formal development is in [`proof.pdf`](proof.pdf). In brief:
   training target. RLVR is the zero-noise, zero-corruption special case.
 - **Three extensions.** The calibration hypothesis is relaxed to an approximate version with a
   matching tightness result; the welfare regret of the training loop is reduced to the reward
-  error, exposing an irreducible floor set by the trimming and contamination penalties; and the
+  error, with a floor set by the trimming and contamination penalties; and the
   per-query guarantee is lifted to a per-distribution welfare-regret bound whose contamination
-  threshold is shown to be sharp.
+  threshold is sharp at the breakdown point.
 
 The experimental programme is designed to test the assumptions these results rest on, above all
 calibration, which the theory identifies as load-bearing.

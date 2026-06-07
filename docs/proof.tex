@@ -76,7 +76,7 @@ these give a welfare-consistency theorem for robust RLDF (Theorem~\ref{thm:main}
 the special case of a single consumer, a deterministic world, and a perfect verifier
 (Proposition~\ref{prop:rlvr}, Corollary~\ref{cor:rlvr}). We then relax exact calibration to an
 $\eta$-approximate hypothesis (Theorem~\ref{thm:approxcalib}), reduce the welfare regret of the
-training loop to the reward error and expose the irreducible floor that the trimming and
+training loop to the reward error and characterize the floor that the trimming and
 contamination penalties leave behind (Theorem~\ref{thm:regret}), and lift the per-query result to
 a per-distribution welfare-regret bound (Theorem~\ref{thm:dist}) whose contamination threshold
 $\eps<\alpha$ we show is sharp (Proposition~\ref{prop:sharp}).
@@ -717,7 +717,8 @@ margin. The union bound over $\Ac_c$ is identical to Theorem~\ref{thm:main}.
 The dependence on $\eta$ cannot be removed. Even with $\alpha=0$, $\eps=0$, and an infinite panel
 ($s=0$), there exist a query and a candidate pair $\{a^\star,a'\}$ with
 $\Wbar(x,a^\star)-\Wbar(x,a')=M$ and an $\eta$-approximately-calibrated grader for which the
-\textup{(exact)} reward ranks $a'$ strictly above $a^\star$ whenever $\eta\ge M/2$.
+\textup{(exact)} reward ranks $a'$ at least as high as $a^\star$ whenever $\eta\ge M/2$, and
+strictly above once $\eta>M/2$.
 \end{proposition}
 
 \begin{proof}
@@ -758,12 +759,15 @@ on the high-probability event that every panel deviates by at most its sampling 
   \qquad s_n=\tfrac{1}{1-2\alpha}\sqrt{\tfrac{1}{2n}\log\tfrac{2}{\delta'}},
 \]
 by Lemma~\ref{lem:three}(i)--(iii) and Assumption~\ref{ass:approxcalib}, with $\delta'$ allocated
-across panels by a union bound.
+by a union bound across the finitely many panels evaluated during training; for a continuous query
+distribution the uniform bound additionally requires a covering of the candidate-generating policy
+class, which we assume.
 
 \begin{theorem}[Reward error to welfare regret]
 \label{thm:regret}
-Suppose $\bigl|\hat\mu_\alpha^{(n)}(x,a)-\Wbar(x,a)\bigr|\le b$ for all $(x,a)$ in the support of
-the candidate sets, so that $|\widehat V(\pi)-V^\star(\pi)|\le b$ for all $\pi\in\Pi$. If $\hat\pi$
+Suppose the uniform reward error $\bigl|\hat\mu_\alpha^{(n)}(x,a)-\Wbar(x,a)\bigr|\le b$ holds
+across the evaluated candidate panels, so that $|\widehat V(\pi)-V^\star(\pi)|\le b$ for all
+$\pi\in\Pi$. If $\hat\pi$
 is an $\eps_{\mathrm{opt}}$-approximate maximizer of $\widehat V$ over $\Pi$, that is
 $\widehat V(\hat\pi)\ge\sup_{\pi\in\Pi}\widehat V(\pi)-\eps_{\mathrm{opt}}$, then
 \[
@@ -797,16 +801,16 @@ $\beta\to0$. The optimization term $\eps_{\mathrm{opt}}$ is what a convergence a
 policy-gradient step under a biased reward oracle controls \cite{biasedpg}.
 \end{remark}
 
-\begin{remark}[Which part of the floor is irreducible]
+\begin{remark}[The floor of the regret bound]
 \label{rem:floor}
 As the panel grows ($s_n\to0$) and the optimizer converges ($\eps_{\mathrm{opt}}\to0$), the bound
-stalls at $2\bigl(2\alpha+\tfrac{\eps}{1-2\alpha}+\eta\bigr)$. The contamination and calibration
-parts of this floor are not an artifact of the analysis: Proposition~\ref{prop:calibtight}
-($\eta\ge M/2$) and Proposition~\ref{prop:sharp} ($\eps\ge\alpha$) exhibit instances on which the
-robust reward genuinely mis-ranks by those amounts, so a reward-driven optimizer is steered into
-the corresponding welfare loss. The trimming part is a worst-case bound on the estimand shift and
-is the one term that improves under grade concentration, to $O(\alpha\sigma)$, by the remark
-following Lemma~\ref{lem:three}.
+stalls at $2\bigl(2\alpha+\tfrac{\eps}{1-2\alpha}+\eta\bigr)$. The calibration part of this floor is
+matched: Proposition~\ref{prop:calibtight} exhibits an instance on which the robust reward mis-ranks
+by $2\eta$, so a reward-driven optimizer is steered into that welfare loss. The trimming and
+contamination parts are worst-case bounds on the estimand shift rather than matched converses; both
+improve under grade concentration, the trimming term to $O(\alpha\sigma)$ by the remark following
+Lemma~\ref{lem:three}, and the contamination breakdown is reached only at $\eps\ge\alpha$
+(Proposition~\ref{prop:sharp}), outside the operating regime $\eps<\alpha$.
 \end{remark}
 
 \section{From per-query to per-distribution guarantees}
@@ -827,7 +831,7 @@ on how much $\Dc$-mass sits near zero margin.
 Let $\hat a$ select $\argmax_{a\in\Ac_c(x)}\hat\mu_\alpha^{(n)}(x,a)$ at each $x$, under the
 per-query conditions of Theorem~\ref{thm:approxcalib} with penalty
 $p=4\alpha+\frac{2\eps}{1-2\alpha}+2s+2\eta$ and per-query failure probability at most $\delta$.
-Suppose a margin-distribution bound $\Prob_{x\sim\Dc}(M(x)<\tau)\le\psi(\tau)$ holds for a
+Suppose a margin-distribution bound $\Prob_{x\sim\Dc}(M(x)\le\tau)\le\psi(\tau)$ holds for a
 nondecreasing $\psi:[0,\infty)\to[0,1]$. Then the $\Dc$-expected welfare regret obeys
 \[
   \E_{x\sim\Dc}\bigl[\Wbar(x,a^\star(x))-\Wbar(x,\hat a(x))\bigr]\;\le\;\psi(p)+\delta.
@@ -851,10 +855,11 @@ Theorem~\ref{thm:main} is exactly the boundary of what any trimmed-mean reward c
 \begin{proposition}[Sharpness of the $\eps<\alpha$ threshold]
 \label{prop:sharp}
 Fix $\alpha\in(0,\tfrac12)$. For every $\eps>\alpha$ there is an $\eps$-contaminated instance, a
-query with two candidates of positive welfare gap, on which the $\alpha$-trimmed empirical reward
-ranks the manipulation strictly above the welfare-optimal response for \emph{every} panel size
-$n$. Hence no panel size restores consistency once $\eps\ge\alpha$, and the condition $\eps<\alpha$
-cannot be relaxed for the trimmed-mean aggregator.
+query with two candidates of positive welfare gap, on which the $\alpha$-trimmed reward functional
+ranks the manipulation strictly above the welfare-optimal response, so the empirical reward
+mis-ranks with probability tending to $1$ as $n\to\infty$. Hence no panel size restores consistency
+once $\eps\ge\alpha$, and the condition $\eps<\alpha$ cannot be relaxed for the trimmed-mean
+aggregator.
 \end{proposition}
 
 \begin{proof}
@@ -862,17 +867,20 @@ Let $a^\star$ be welfare-optimal with all clean grades at a value $w^\star\in(0,
 $\hat\mu_\alpha^{(n)}(a^\star)=w^\star$ for every $n$. Let $a^\dagger$ be a manipulation whose
 gameable fraction $\eps>\alpha$ places its grades at the ceiling $1$ and whose remaining
 $(1-\eps)$ faithful grades sit at $0$, so its grade law has quantile function $F^{-1}(p)=0$ for
-$p<1-\eps$ and $F^{-1}(p)=1$ for $p\ge1-\eps$. Its $\alpha$-trimmed functional is
+$p<1-\eps$ and $F^{-1}(p)=1$ for $p\ge1-\eps$. For $\alpha<\eps\le1-\alpha$ its $\alpha$-trimmed
+functional is
 \[
   \mu_\alpha(F)=\frac{1}{1-2\alpha}\int_\alpha^{1-\alpha}F^{-1}(p)\,dp=\frac{\eps-\alpha}{1-2\alpha},
 \]
 because the retained range $[\alpha,1-\alpha]$ still contains an $(\eps-\alpha)$ mass of ceiling
-grades that trimming the top $\alpha$ does not remove. This value is independent of $n$ and exceeds
-$w^\star$ whenever $w^\star<(\eps-\alpha)/(1-2\alpha)$, which is achievable since the right-hand
-side is positive for $\eps>\alpha$. For any such instance the manipulation outranks the optimum at
-every $n$, although $\Wbar(x,a^\star)=w^\star>\Wbar(x,a^\dagger)=(1-\eps)\cdot0+\eps\cdot w_g$ for a
-manipulation with true gameable-welfare $w_g$ small. The breakdown point of the $\alpha$-trimmed
-mean is therefore $\alpha$, matching the sufficient condition of Theorem~\ref{thm:main}.
+grades that trimming the top $\alpha$ does not remove. This population functional exceeds $w^\star$
+whenever $w^\star<(\eps-\alpha)/(1-2\alpha)$, which is positive for $\eps>\alpha$. The empirical
+trimmed mean $\hat\mu_\alpha^{(n)}(a^\dagger)$ concentrates on it by Lemma~\ref{lem:three}(iii), so
+it exceeds $w^\star$ with probability tending to $1$, while $\hat\mu_\alpha^{(n)}(a^\star)=w^\star$
+deterministically; the manipulation then outranks the optimum although
+$\Wbar(x,a^\star)=w^\star>\Wbar(x,a^\dagger)$ for small gameable-welfare. No panel size restores
+consistency, so the breakdown point of the $\alpha$-trimmed mean is $\alpha$, matching the
+sufficient condition of Theorem~\ref{thm:main}.
 \end{proof}
 
 
