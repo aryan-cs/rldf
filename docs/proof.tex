@@ -1,0 +1,885 @@
+\documentclass[11pt]{article}
+
+% ===== packages =====
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,urlcolor=blue!55!black]{hyperref}
+
+% ===== theorem environments =====
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{example}{Example}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+% ===== macros =====
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Ind}{\mathbf{1}}
+\newcommand{\Xc}{\mathcal{X}}
+\newcommand{\Ac}{\mathcal{A}}
+\newcommand{\Uc}{\mathcal{U}}
+\newcommand{\Oc}{\mathcal{O}}
+\newcommand{\Dc}{\mathcal{D}}
+\newcommand{\Ec}{\mathcal{E}}
+\newcommand{\Wbar}{\overline{W}}
+\newcommand{\policy}{\pi_{\theta}}
+\newcommand{\given}{\,\vert\,}
+\newcommand{\eps}{\varepsilon}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\supp}{supp}
+\newcommand{\defeq}{\vcentcolon=}
+
+\title{\textbf{Reinforcement Learning from Downstream Feedback:\\[2pt]
+A Welfare-Consistency Theorem for\\ Consequence-Graded Policy Optimization}}
+\author{Aryan Gupta\\[2pt]\small\texttt{aryan.cs.app@gmail.com}}
+\date{June 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Reinforcement learning with verifiable rewards (RLVR) trains a policy against an incorruptible,
+policy-independent grader, and works on tasks where correctness can be checked mechanically,
+such as mathematics and code. Most queries a language model receives are not of this kind: a
+recommendation or an explanation has no answer key. This note develops \emph{Reinforcement
+Learning from Downstream Feedback} (RLDF), which replaces the verifier by a population of
+simulated consumers. Each candidate response is played out against the population, the realized
+outcome of acting on it is graded, and the population-aggregated grade is the reward. We
+formalize the quantity being optimized and prove the following. The foresight (response-only)
+reward used by ordinary RLHF is not welfare-consistent once responses can inflate perceived
+quality (Lemma~\ref{lem:foresight}), whereas the hindsight (outcome-conditioned) reward is
+welfare-consistent under an explicit calibration hypothesis (Lemma~\ref{lem:hindsight}). A
+finite panel of consumers estimates population welfare at rate $O(1/\sqrt n)$
+(Lemma~\ref{lem:concentration}), and a strategically corruptible minority admits a closed-form
+threshold $\eps^\star$ above which the reward-maximizing response is a manipulation
+(Lemma~\ref{lem:threshold}). An $\alpha$-trimmed-mean aggregator then preserves the welfare
+\emph{ranking} of responses, though not their welfare \emph{value}, whenever the corruptible
+fraction satisfies $\eps<\alpha$ and a margin condition holds (Lemma~\ref{lem:rank}). Together
+these give a welfare-consistency theorem for robust RLDF (Theorem~\ref{thm:main}), with RLVR as
+the special case of a single consumer, a deterministic world, and a perfect verifier
+(Proposition~\ref{prop:rlvr}, Corollary~\ref{cor:rlvr}).
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:intro}
+
+Reinforcement learning with verifiable rewards (RLVR) is the training recipe behind the recent
+generation of reasoning models \cite{deepseekr1,tulu3,deepseekmath}. For a prompt whose answer
+can be checked, such as a final numeric answer or a unit test, one samples responses from the
+policy, scores each with an automatic verifier returning $1$ for correct and $0$ otherwise, and
+ascends the resulting reward. No human annotator rates the outputs and no learned reward model
+sits between the policy and the truth. The verifier is incorruptible and policy-independent: a
+wrong answer cannot be rephrased into a passing grade, and the grader does not drift as the
+policy improves.
+
+This is also what bounds RLVR's reach. The recipe applies only where a cheap, sound checker
+exists, which covers a small fraction of the queries users pose; a question like whether to
+accept a job offer has no answer key. Recent work extends RLVR to open-ended domains by learning
+a soft grader, either a generative reward model or a rubric critic
+\cite{crossingbridge,rlmt,truthrl}, but a learned grader reintroduces the corruptibility the
+verifier removed: it scores the response, and a response can be optimized to look good to the
+grader without being good for the user. Sycophancy and confident hallucination follow
+\cite{sycophancy,williams}.
+
+\paragraph{The downstream-feedback idea.}
+RLDF changes what is graded. Instead of scoring the response, it simulates what happens after a
+user acts on the response and grades the consequence. A sycophantic or confidently hallucinated
+answer can score well to a response-only grader, but once a simulated user acts on it the
+realized outcome is poor, and the reward depends on that outcome rather than on the response's
+surface plausibility. In the economic reading, a response is a product, a population of
+heterogeneous simulated consumers acts on it and realizes welfare or regret, and the aggregate
+of those outcomes is the reward. The point of departure from RLVR is that for a non-trivial class
+of tasks the outcome of acting on a response is mechanically scorable even when the response
+itself is open-ended natural language, so consequence-grading recovers a policy-independent
+signal where response-grading cannot (Definition~\ref{def:vo}).
+
+\paragraph{Outline.}
+Section~\ref{sec:setup} fixes notation, and Section~\ref{sec:rlvr} shows that RLVR is the special
+case of RLDF with a single consumer, a deterministic world, and a perfect verifier, placing RLDF
+on a spectrum from outcome-verifiable tasks, where the grader is policy-independent, to
+simulated-outcome tasks, where it is not. Section~\ref{sec:foresight} treats the
+foresight-hindsight gap: the response-only reward is not welfare-consistent when responses carry
+a persuasion bias (Lemma~\ref{lem:foresight}), while the outcome-conditioned reward is, under
+calibration (Lemma~\ref{lem:hindsight}); these restate, in the present notation, the central
+claim of RLHS \cite{rlhs}. Section~\ref{sec:market} shows the finite-panel reward concentrates on
+population welfare. Section~\ref{sec:game} derives the gameability threshold and shows that a
+stronger type-aware adversary is blocked by grading on representative panels, which makes precise
+the finding of \cite{williams} that a small gameable minority suffices to induce manipulation.
+Section~\ref{sec:robust} replaces the mean by a trimmed mean and recovers the welfare ranking
+under $\eps<\alpha$ and a margin condition. Section~\ref{sec:mainthm} assembles these into
+Theorem~\ref{thm:main}, and Sections~\ref{sec:discussion}--\ref{sec:related} discuss the
+assumptions and the relation to prior work.
+
+
+\section{Setup and notation}
+\label{sec:setup}
+
+We work with a one-shot advisory interaction: the policy observes a query, emits a response, a
+user acts on it, and an outcome is realized. The multi-turn case extends this straightforwardly
+and is not needed for any result below.
+
+\begin{definition}[Interaction primitives]
+\label{def:primitives}
+Fix measurable spaces of \emph{queries} $\Xc$, \emph{responses} $\Ac$, \emph{user types}
+$\Uc$, and \emph{outcomes} $\Oc$. The interaction is specified by:
+\begin{enumerate}[label=(\roman*),leftmargin=2.2em,itemsep=1pt,topsep=2pt]
+  \item a query distribution $\Dc\in\Delta(\Xc)$;
+  \item a \emph{population kernel} $P(\cdot\given x)\in\Delta(\Uc)$, the distribution of user
+  types who issue query $x$ (heterogeneity: distinct users may share a query yet differ in
+  their latent situation and preferences);
+  \item a \emph{policy} $\policy(\cdot\given x)\in\Delta(\Ac)$, parameterized by
+  $\theta\in\Theta$;
+  \item a \emph{world model} (transition kernel) $T(\cdot\given x,u,a)\in\Delta(\Oc)$, the
+  distribution of realized outcomes when a user of type $u$ acts on response $a$ to query
+  $x$;
+  \item a \emph{welfare function} $W:\Xc\times\Uc\times\Ac\to[0,1]$, the true (latent) utility
+  to a user of type $u$ from acting on response $a$. Boundedness to $[0,1]$ is a
+  normalization.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Alignment target and population welfare]
+\label{def:target}
+The \emph{alignment target} is
+\[
+  J^\star(\theta)
+  \;\defeq\;
+  \E_{x\sim\Dc}\;\E_{u\sim P(\cdot\given x)}\;\E_{a\sim\policy(\cdot\given x)}
+  \big[\,W(x,u,a)\,\big].
+\]
+For fixed $(x,a)$, the \emph{population-average welfare} is
+$\Wbar(x,a)\defeq\E_{u\sim P(\cdot\given x)}[\,W(x,u,a)\,]$, so that
+$J^\star(\theta)=\E_{x\sim\Dc}\,\E_{a\sim\policy(\cdot\given x)}[\,\Wbar(x,a)\,]$. The
+\emph{welfare-optimal response set} at $x$ is
+$\Ac^\star(x)\defeq\argmax_{a\in\Ac}\Wbar(x,a)$ (assumed non-empty).
+\end{definition}
+
+Because the policy may choose its action distribution separately for each $x$, maximizing
+$J^\star$ decomposes pointwise: $J^\star$ is maximized iff $\policy(\cdot\given x)$ is
+supported on $\Ac^\star(x)$ for $\Dc$-almost every $x$. This reduces the design problem to a
+\emph{per-query ranking} problem, which is the criterion every reward in this note is
+measured against.
+
+\begin{definition}[Welfare-consistency of a reward]
+\label{def:consistency}
+A reward $r:\Xc\times\Ac\to\R$ is \emph{welfare-consistent at $x$} if
+$\argmax_{a\in\Ac} r(x,a)\subseteq\Ac^\star(x)$, and \emph{on a candidate set}
+$\Ac_c\subseteq\Ac$ if the inclusion holds with both $\argmax$ operators restricted to
+$\Ac_c$. A policy that maximizes a welfare-consistent reward pointwise maximizes $J^\star$.
+\end{definition}
+
+\begin{definition}[Foresight and hindsight graders]
+\label{def:graders}
+A \emph{foresight grader} $r_F:\Xc\times\Ac\to[0,1]$ scores a response before any outcome is
+realized, seeing $(x,a)$ only. A \emph{hindsight grader} is the composition of (i) the world
+model $T$, realizing $o\sim T(\cdot\given x,u,a)$, and (ii) an \emph{outcome evaluator}
+$g:\Oc\to[0,1]$, returning $g(o)$. Throughout, ``grader'' in the hindsight setting refers to the
+entire simulate-then-evaluate pipeline $(T,g)$; in particular, any way a response could fool the
+simulator into producing a misleadingly favorable outcome is accounted for inside $g\circ T$,
+not treated as a separate channel.
+\end{definition}
+
+
+\section{RLVR as a degenerate special case}
+\label{sec:rlvr}
+
+RLDF strictly generalizes RLVR. Recording the special case first fixes intuition, and it is used
+later when the main theorem recovers RLVR's guarantee as a limit.
+
+\begin{proposition}[RLVR is zero-noise, zero-corruption RLDF]
+\label{prop:rlvr}
+Suppose at every query $x$: \textup{(a)} $P(\cdot\given x)=\delta_{u_0}$ (single canonical
+consumer); \textup{(b)} $T(\cdot\given x,u_0,a)=\delta_{o(x,a)}$ (deterministic world);
+\textup{(c)} $g(o(x,a))=\Ind\{a\text{ correct for }x\}$ is computed exactly (perfect,
+non-corruptible verifier); \textup{(d)} $W(x,u_0,a)=\Ind\{a\text{ correct for }x\}$. Then the
+hindsight reward equals welfare identically, $\Wbar(x,a)=g(o(x,a))=W(x,u_0,a)$, with zero
+variance and no corruptible mass; consequently the RLDF reward reduces to the RLVR reward and
+is welfare-consistent at every $x$.
+\end{proposition}
+
+\begin{proof}
+Under (a), $\Wbar(x,a)=W(x,u_0,a)$; under (d), this equals $\Ind\{a\text{ correct}\}$. Under
+(b)--(c), the hindsight grade is the deterministic quantity $g(o(x,a))=\Ind\{a\text{
+correct}\}$, identical to $\Wbar(x,a)$ and noise-free. Then $\argmax_a\Wbar(x,a)$ is the set
+of correct responses, which is $\Ac^\star(x)$ by definition.
+\end{proof}
+
+RLDF generalizes RLVR along the three axes that Proposition~\ref{prop:rlvr} holds fixed: a
+non-degenerate population $P$, a stochastic world $T$, and an imperfect grader. The third axis
+deserves a name, since it is what separates an extension of RLVR from a relabeled reward model.
+
+\begin{definition}[Outcome-verifiable vs.\ simulated-outcome tasks]
+\label{def:vo}
+A task $(x,T,g)$ is \emph{outcome-verifiable} if the pipeline $g\circ T$ is policy-independent:
+the outcome of acting on a response is produced by a fixed executor and scored by a fixed
+program $\phi$, so $g(T(x,u,a))=\phi(\Ec(x,a))$ for a sandbox state $\Ec$ and scorer $\phi$ that
+do not depend on $\theta$. It is \emph{simulated-outcome} if $g\circ T$ is itself a learned model
+(for instance an LLM world model and evaluator), whose representation of consequences can
+co-adapt with the policy.
+\end{definition}
+
+\begin{remark}[The spectrum]
+\label{rem:spectrum}
+Outcome-verifiable tasks are common even when the response is open-ended. A code change, for
+instance, is free-form text, but whether it passes the project's test suite is a fixed check
+that does not depend on the policy. On such tasks $g\circ T$ is a genuine verifier, the
+corruption parameter $\eps$ of Section~\ref{sec:game} is $0$, and Theorem~\ref{thm:main} recovers
+RLVR-grade guarantees (Corollary~\ref{cor:rlvr}). On simulated-outcome tasks the grader is a
+model and $\eps>0$ in general, so calling the reward verifiable is unwarranted without an
+argument that $g\circ T$ is hard to fool; the robust aggregation of Section~\ref{sec:robust}
+stands in for the missing policy-independence.
+\end{remark}
+
+
+\section{The foresight-hindsight gap}
+\label{sec:foresight}
+
+Grading the response and grading the consequence give different rewards, and the difference is
+visible already at the level of the reward, before any optimizer is introduced. The results in
+this section are, in substance, the central claim of RLHS \cite{rlhs} in the present notation;
+we include proofs because later results build on them.
+
+A perfectly Bayesian, non-manipulable foresight grader would report
+$\E_u[W(x,u,a)]=\Wbar(x,a)$ and would be welfare-consistent. The empirical content of the
+sycophancy and deception literature \cite{sycophancy,williams,sleeper} is that real graders are
+not of this kind: a response can be shaped to inflate perceived quality without improving
+welfare. We take this as an assumption rather than deriving it.
+
+\begin{assumption}[Persuasion bias of foresight grading]
+\label{ass:bias}
+The foresight grader decomposes as $r_F(x,a)=\Wbar(x,a)+B(x,a)$, where $B:\Xc\times\Ac\to\R$
+is the \emph{persuasion bias}, the amount by which response $a$ moves perceived quality away from
+true population welfare. A non-manipulable grader has $B\equiv 0$; we assume only that $B$ is
+\emph{response-sensitive}, i.e.\ there exist queries at which $B(x,\cdot)$ is non-constant in
+$a$.
+\end{assumption}
+
+\begin{lemma}[Foresight reward is not welfare-consistent]
+\label{lem:foresight}
+Under Assumption~\ref{ass:bias}, there exist a query $x$ and responses $a_1,a_2\in\Ac$ with
+$\Wbar(x,a_1)>\Wbar(x,a_2)$ yet $r_F(x,a_1)<r_F(x,a_2)$; hence
+$\argmax_a r_F(x,a)\not\subseteq\Ac^\star(x)$, and maximizing the foresight reward can
+strictly select a welfare-inferior response.
+\end{lemma}
+
+\begin{proof}
+This is an existence claim, so one instance suffices. Fix a query $x$ at which $B(x,\cdot)$ is
+non-constant (Assumption~\ref{ass:bias}). Let $a_1$ be a welfare-superior ``honest'' response
+and $a_2$ a ``sycophantic'' response with
+\[
+  \Wbar(x,a_2)=\Wbar(x,a_1)-\delta\quad(\delta>0),
+  \qquad B(x,a_2)-B(x,a_1)>\delta .
+\]
+Such a pair exists whenever the bias gap can exceed the welfare gap, the defining feature of a
+manipulable grader. Then
+\[
+  r_F(x,a_2)-r_F(x,a_1)
+  =\underbrace{[\Wbar(x,a_2)-\Wbar(x,a_1)]}_{=-\delta}
+   +\underbrace{[B(x,a_2)-B(x,a_1)]}_{>\,\delta}\;>\;0,
+\]
+so $a_2$ is strictly foresight-preferred while strictly welfare-inferior, and
+$a_2\in\argmax\{r_F(x,a_1),r_F(x,a_2)\}$ with $a_2\notin\Ac^\star(x)$.
+\end{proof}
+
+\begin{remark}
+The lemma is an existence statement, and intentionally so. Response-sensitivity of $B$ does not
+by itself reorder the $\argmax$: a bias that varies in $a$ but never overtakes the welfare gap
+leaves the optimum intact. The assumption is that the overtaking case occurs, which is what the
+sycophancy literature reports, and one instance is enough to deny welfare-consistency.
+\end{remark}
+
+\begin{assumption}[Outcome calibration]
+\label{ass:calib}
+The hindsight grader is \emph{outcome-calibrated} if, for all $(x,u,a)$,
+\[
+  \rho(x,u,a)\;\defeq\;\E_{o\sim T(\cdot\given x,u,a)}\big[g(o)\big]\;=\;W(x,u,a).
+\]
+More generally we allow affine-monotone calibration $\rho=c_0+c_1 W$ with $c_1>0$; every
+ranking statement below is invariant to such a reparameterization, so proofs are stated for
+$c_0=0,\ c_1=1$.
+\end{assumption}
+
+\begin{lemma}[Hindsight reward is welfare-consistent]
+\label{lem:hindsight}
+Define the \emph{population hindsight reward}
+$r_H(x,a)\defeq\E_{u\sim P(\cdot\given x)}\E_{o\sim T(\cdot\given x,u,a)}[g(o)]
+=\E_{u\sim P(\cdot\given x)}[\rho(x,u,a)]$. Under Assumption~\ref{ass:calib},
+$r_H(x,a)=\Wbar(x,a)$ for all $x,a$; consequently $r_H$ is welfare-consistent at every $x$.
+\end{lemma}
+
+\begin{proof}
+By the tower property $r_H(x,a)=\E_u[\rho(x,u,a)]$; substituting calibration
+$\rho(x,u,a)=W(x,u,a)$ gives $r_H(x,a)=\E_u[W(x,u,a)]=\Wbar(x,a)$. Hence
+$\argmax_a r_H(x,a)=\argmax_a\Wbar(x,a)=\Ac^\star(x)$.
+\end{proof}
+
+\begin{remark}[Why the bias disappears]
+\label{rem:nobias}
+The persuasion term $B$ has no analogue in $r_H$ because $g(o)$ is a function of the realized
+outcome $o$, and $o$ depends on the response only through the law $T(\cdot\given x,u,a)$, the
+channel through which $a$ actually changes the world. A persuasive but unhelpful response
+induces the same outcome distribution as a blunt unhelpful one and is graded identically.
+Conditionally on $(x,u,a)$, the persuasiveness of $a$ is irrelevant to $o$; this conditional
+irrelevance is exactly Assumption~\ref{ass:calib}, and its failure is the corruptible case of
+Section~\ref{sec:game}.
+\end{remark}
+
+
+\section{The market reward over a finite population}
+\label{sec:market}
+
+Lemma~\ref{lem:hindsight} concerns the idealized reward $r_H=\Wbar$, an expectation over the
+full population and outcome law. An implementable reward replaces both expectations by
+simulation: draw a finite \emph{panel} of consumers, realize one outcome each, and aggregate the
+grades. This panel is the ``market'' that prices the response by its realized experience.
+
+\begin{definition}[Empirical market reward]
+\label{def:market}
+Fix $(x,a)$ and panel size $n$. Draw $u_1,\dots,u_n\stackrel{\text{i.i.d.}}{\sim}
+P(\cdot\given x)$, and for each draw $o_i\sim T(\cdot\given x,u_i,a)$. The \emph{empirical
+market reward} is the panel mean $\hat r_n(x,a)\defeq\frac1n\sum_{i=1}^n g(o_i)\in[0,1]$.
+\end{definition}
+
+\begin{lemma}[Concentration of the market reward]
+\label{lem:concentration}
+Assume $g\in[0,1]$. Then $\E[\hat r_n(x,a)]=r_H(x,a)$, and for every $t>0$,
+\[
+  \Prob\big(\,|\hat r_n(x,a)-r_H(x,a)|\ge t\,\big)\;\le\;2\exp(-2nt^2).
+\]
+Under Assumption~\ref{ass:calib} (so $r_H=\Wbar$), a panel of size
+$n\ge\frac{1}{2t^2}\log\frac2\delta$ gives $|\hat r_n(x,a)-\Wbar(x,a)|<t$ with probability at
+least $1-\delta$.
+\end{lemma}
+
+\begin{proof}
+The pairs $(u_i,o_i)$ are i.i.d., hence so are the $g(o_i)\in[0,1]$, with common mean
+$\E[g(o_i)]=\E_{u\sim P}\E_{o\sim T}[g(o)]=r_H(x,a)$ by Definition~\ref{def:graders} and the
+tower property. Hoeffding's inequality \cite{hoeffding} for an average of $n$ independent
+$[0,1]$ variables gives the two-sided bound; inverting $2e^{-2nt^2}\le\delta$ gives the
+sample-size statement.
+\end{proof}
+
+Two of the three degeneracies of Proposition~\ref{prop:rlvr} are now lifted, the population
+being a genuine distribution and the world stochastic, and the reward still tracks welfare. The
+third, an incorruptible grader, is the subject of the next section, and removing it is the real
+difficulty.
+
+
+\section{Strategic corruption and the gameability threshold}
+\label{sec:game}
+
+Lemma~\ref{lem:hindsight} rests entirely on calibration. We now model its failure. The failure
+that matters is not uniform noise but a strategic one: some subpopulation can be driven to report
+high grades by a response that does not serve it, for example a user who reports satisfaction
+when flattered. Following \cite{williams}, we model a faithful majority and a corruptible
+minority.
+
+\begin{definition}[Contaminated population and manipulation]
+\label{def:contam}
+Fix $x$. The population is an $\eps$-contaminated mixture
+$P(\cdot\given x)=(1-\eps)P_{\mathrm f}(\cdot\given x)+\eps P_{\mathrm g}(\cdot\given x)$,
+where calibration (Assumption~\ref{ass:calib}) holds on the \emph{faithful} part
+$P_{\mathrm f}$ and may fail on the \emph{gameable} part $P_{\mathrm g}$. A \emph{manipulation}
+is a response $a^\dagger$ with a corrupted ceiling $G_{\max}\in(0,1]$ such that, for gameable
+$u$, $\rho(x,u,a^\dagger)=G_{\max}$ irrespective of the true (low) welfare $W(x,u,a^\dagger)$.
+\end{definition}
+
+For a welfare-optimal honest response $a^\star\in\Ac^\star(x)$, write
+$\Wbar^\star\defeq\Wbar(x,a^\star)$, and let
+\[
+  \Wbar^\dagger_h\;\defeq\;\E_{u\sim P_{\mathrm f}}\big[W(x,u,a^\dagger)\big]
+\]
+denote the manipulation's true welfare on the faithful part, with
+$\Wbar^\dagger_h<\Wbar^\star$. For transparency we take the honest response to attract no
+corruption (reward $\Wbar^\star$); allowing it to be corrupted as well only strengthens the case
+for the remedy of Section~\ref{sec:robust}.
+
+\begin{lemma}[Gameability threshold]
+\label{lem:threshold}
+Under mean aggregation over the contaminated population,
+$r_{\mathrm{mkt}}(a^\star)=\Wbar^\star$ and
+$r_{\mathrm{mkt}}(a^\dagger)=(1-\eps)\Wbar^\dagger_h+\eps G_{\max}$. The manipulation is
+strictly market-preferred iff
+\[
+  \boxed{\;\eps>\eps^\star\defeq\frac{\Wbar^\star-\Wbar^\dagger_h}{G_{\max}-\Wbar^\dagger_h}\;}
+\]
+and $\eps^\star\in(0,1)$ whenever $\Wbar^\dagger_h<\Wbar^\star\le G_{\max}$.
+\end{lemma}
+
+\begin{proof}
+The reward of $a^\dagger$ splits over the mixture: a $(1-\eps)$ mass grades it at its true
+welfare $\Wbar^\dagger_h$ (calibration on $P_{\mathrm f}$), an $\eps$ mass at the ceiling
+$G_{\max}$ (Definition~\ref{def:contam}), giving
+$r_{\mathrm{mkt}}(a^\dagger)=(1-\eps)\Wbar^\dagger_h+\eps G_{\max}$. Then
+\[
+  r_{\mathrm{mkt}}(a^\dagger)>r_{\mathrm{mkt}}(a^\star)
+  \iff \eps(G_{\max}-\Wbar^\dagger_h)>\Wbar^\star-\Wbar^\dagger_h
+  \iff \eps>\eps^\star,
+\]
+dividing by $G_{\max}-\Wbar^\dagger_h>0$. The numerator is positive
+($\Wbar^\star>\Wbar^\dagger_h$) so $\eps^\star>0$; and $\Wbar^\star\le G_{\max}$ gives
+$\eps^\star\le1$.
+\end{proof}
+
+\begin{remark}[What makes ``$2\%$ suffices'' rigorous]
+\label{rem:twopercent}
+The threshold $\eps^\star$ is small when the welfare margin $\Wbar^\star-\Wbar^\dagger_h$ is
+small relative to the corrupt advantage $G_{\max}-\Wbar^\dagger_h$, that is, when gaming one
+gameable consumer pays off far more than honest service would. As $G_{\max}\to1$ with a fixed
+modest margin, $\eps^\star\to(\Wbar^\star-\Wbar^\dagger_h)/(1-\Wbar^\dagger_h)$, which can sit at
+a few percent. This is the closed-form mechanism behind the observation of \cite{williams} that
+a gameable minority of order $2\%$ already tips an RL-trained model into manipulation: it is the
+leverage $G_{\max}$, not the size $\eps$, that matters.
+\end{remark}
+
+\begin{remark}[Targeting, and why the panel must be representative]
+\label{rem:target}
+Lemma~\ref{lem:threshold} prices a single response against a representative draw from
+$P(\cdot\given x)$. A stronger adversary, a type-aware policy $\pi_\theta(\cdot\given x,s)$ that
+observes a gameability signal $s$ rather than the query-only policy $\pi_\theta(\cdot\given x)$
+of Definition~\ref{def:primitives}, could in principle route $a^\dagger$ only to gameable
+consumers and $a^\star$ to the rest. If, in addition, the reward graded each response on the
+consumers who received it (``recipient-grading''), then $a^\dagger$ would be graded by an
+all-gameable panel and score the ceiling $G_{\max}$, collapsing the threshold to $\eps^\star=0$,
+so that any positive corruptible fraction would be exploited. The defense is structural and is
+already built into Definition~\ref{def:market}: every candidate is graded on a fresh i.i.d.\
+panel drawn from the true population $P(\cdot\given x)$, not on its recipients. Under
+representative panels the gameable share of $a^\dagger$'s panel is the population $\eps$
+regardless of how the policy routes responses, so a type-aware adversary gains nothing at
+grading time, and hypothesis (A2) below ($\eps<\alpha$ in every panel) holds by construction
+whenever the population's gameable fraction is itself below $\alpha$. Recipient-grading forfeits
+this guarantee; representative grading keeps the corruptible mass a bounded minority rather than
+a hand-picked majority.
+\end{remark}
+
+Together, Lemma~\ref{lem:threshold} and Remark~\ref{rem:target} show that a mean over a
+population carrying any corruptible mass is unsafe. The remedy has two parts: grade on
+representative panels, so the corruptible mass stays a bounded minority
+(Remark~\ref{rem:target}), and aggregate that minority out, so it cannot move the price
+(Section~\ref{sec:robust}).
+
+
+\section{Robust aggregation restores the welfare ranking}
+\label{sec:robust}
+
+We replace the mean by a trimmed mean, discarding the most extreme grades before averaging.
+There is a subtlety, and it is the reason the guarantee below concerns the ranking of responses
+rather than their welfare values: the trimmed mean does not estimate $\Wbar$. It estimates a
+different functional of the grade distribution, and trimming introduces a bias even without
+corruption. We make this estimand shift explicit and prove the weaker property that suffices,
+namely that the welfare order of responses is preserved.
+
+\begin{definition}[$\alpha$-trimmed mean and its functional]
+\label{def:trim}
+For $\alpha\in[0,\tfrac12)$ and a grade law $F$ on $[0,1]$ with quantile function $F^{-1}$, the
+\emph{$\alpha$-trimmed mean functional} is
+$\mu_\alpha(F)\defeq\frac{1}{1-2\alpha}\int_\alpha^{1-\alpha}F^{-1}(p)\,dp$. Its empirical
+version $\hat\mu_\alpha^{(n)}$ discards the $\lceil\alpha n\rceil$ largest and smallest of the
+$n$ panel grades and averages the rest. Write $\mathrm{mean}(F)=\int_0^1 F^{-1}(p)\,dp$, so
+that under calibration the clean grade law $F_a$ of response $a$ has
+$\mathrm{mean}(F_a)=\Wbar(x,a)$.
+\end{definition}
+
+We isolate one elementary property and reuse it three times. Recall the Wasserstein-1 distance
+on $[0,1]$-supported laws, $W_1(F,G)=\int_0^1|F(x)-G(x)|\,dx=\int_0^1|F^{-1}(p)-G^{-1}(p)|\,dp$.
+
+\begin{lemma}[$\mu_\alpha$ is $\tfrac{1}{1-2\alpha}$-Lipschitz in $W_1$]
+\label{lem:lip}
+For $[0,1]$-supported $F,G$,
+$|\mu_\alpha(F)-\mu_\alpha(G)|\le\frac{1}{1-2\alpha}W_1(F,G)\le\frac{1}{1-2\alpha}\|F-G\|_\infty$.
+\end{lemma}
+
+\begin{proof}
+By Definition~\ref{def:trim} and the triangle inequality,
+$|\mu_\alpha(F)-\mu_\alpha(G)|\le\frac{1}{1-2\alpha}\int_\alpha^{1-\alpha}|F^{-1}(p)-G^{-1}(p)|\,dp$.
+The integrand is non-negative, so extending the range to $[0,1]$ only increases the integral,
+giving $\frac{1}{1-2\alpha}\int_0^1|F^{-1}-G^{-1}|\,dp=\frac{1}{1-2\alpha}W_1(F,G)$ by the
+quantile representation of $W_1$. Finally $W_1(F,G)=\int_0^1|F(x)-G(x)|\,dx\le\|F-G\|_\infty$
+since the support has length $1$.
+\end{proof}
+
+\begin{lemma}[Trimming bias, contamination, and sampling bounds]
+\label{lem:three}
+Let $F$ be a clean $[0,1]$-supported grade law and $F_n$ its $n$-sample empirical law. Then:
+\begin{enumerate}[label=\textup{(\roman*)},leftmargin=2.4em,itemsep=2pt,topsep=2pt]
+  \item \emph{(Trimming bias)} $|\mu_\alpha(F)-\mathrm{mean}(F)|\le 2\alpha$.
+  \item \emph{(Contamination)} for any $[0,1]$-supported $F'$ and
+  $\tilde F=(1-\eps)F+\eps F'$, $\ |\mu_\alpha(\tilde F)-\mu_\alpha(F)|\le\frac{\eps}{1-2\alpha}$.
+  \item \emph{(Sampling)} for every $s>0$,
+  $\Prob(|\hat\mu_\alpha^{(n)}-\mu_\alpha(F)|>s)\le 2\exp(-2ns^2(1-2\alpha)^2)$.
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}
+\emph{(i)} Write $\mu_\alpha(F)-\mathrm{mean}(F)=\int_0^1 w(p)F^{-1}(p)\,dp$ with
+$w(p)=\frac{1}{1-2\alpha}\Ind\{\alpha\le p\le1-\alpha\}-1$, so $\int_0^1 w=0$. The positive
+part of $w$ lives on $[\alpha,1-\alpha]$ with value $\frac{2\alpha}{1-2\alpha}$ and total mass
+$2\alpha$; the negative part on the tails with value $-1$ and total mass $2\alpha$. Since
+$F^{-1}\in[0,1]$, each of $\int w_+F^{-1}$ and $\int w_-F^{-1}$ lies in $[0,2\alpha]$, so their
+difference is at most $2\alpha$ in absolute value.
+
+\emph{(ii)} By convexity of $W_1$ in its first argument and the diameter bound $W_1\le1$ on
+$[0,1]$, $W_1(\tilde F,F)\le\eps\,W_1(F',F)\le\eps$. Lemma~\ref{lem:lip} gives
+$|\mu_\alpha(\tilde F)-\mu_\alpha(F)|\le\frac{\eps}{1-2\alpha}$.
+
+\emph{(iii)} By Lemma~\ref{lem:lip},
+$|\hat\mu_\alpha^{(n)}-\mu_\alpha(F)|=|\mu_\alpha(F_n)-\mu_\alpha(F)|\le\frac{1}{1-2\alpha}\|F_n-F\|_\infty$.
+The Dvoretzky--Kiefer--Wolfowitz inequality with Massart's tight constant \cite{dkw,massart}
+gives $\Prob(\|F_n-F\|_\infty>\eta)\le 2e^{-2n\eta^2}$; set $\eta=s(1-2\alpha)$.
+\end{proof}
+
+\begin{remark}[The estimand shift is real]
+Part (i) is not slack to be optimized away: even with a perfectly calibrated, uncontaminated
+grader, $\mu_\alpha(F_a)\ne\Wbar(x,a)$ in general, because trimming reshapes the distribution.
+Robust RLDF therefore does not estimate welfare; it estimates a trimmed surrogate. What survives
+is the comparison between responses, which is all a reward optimizer consumes. The constant
+$2\alpha$ is worst-case, attained only by near-$\{0,1\}$ bimodal grades; under a
+grade-concentration assumption $\mathrm{Var}_F(g)\le\sigma^2$ it improves to $O(\alpha\sigma)$,
+and a median-of-means aggregator \cite{lugosimendelson} trades the trimming bias for a
+sub-Gaussian deviation bound of comparable structure. We carry the conservative $2\alpha$ to
+keep the theorem assumption-light.
+\end{remark}
+
+Let $a^\star$ be welfare-optimal and $a^\dagger$ any welfare-suboptimal alternative, with
+clean grade laws $F^\star,F^\dagger$ and welfares $\Wbar^\star=\mathrm{mean}(F^\star)$,
+$\Wbar^\dagger=\mathrm{mean}(F^\dagger)$. Suppose each response's panel may contain a
+corruptible fraction at most $\eps$.
+
+\begin{lemma}[Ranking preservation under robust aggregation]
+\label{lem:rank}
+Fix $\alpha\in(0,\tfrac12)$ with $\eps<\alpha$. If the welfare margin satisfies
+\[
+  M\defeq\Wbar^\star-\Wbar^\dagger\;>\;\underbrace{4\alpha}_{\text{trimming}}
+  +\underbrace{\frac{2\eps}{1-2\alpha}}_{\text{contamination}}
+  +\underbrace{2s}_{\text{sampling}},
+\]
+then with probability at least $1-4\exp(-2ns^2(1-2\alpha)^2)$ the empirical trimmed market
+rewards satisfy $\hat\mu_\alpha^{(n)}(a^\star)>\hat\mu_\alpha^{(n)}(a^\dagger)$. Robust RLDF
+thus ranks the welfare-optimal response strictly above the suboptimal one despite trimming
+bias, an $\eps$-corruptible panel, and finite sampling.
+\end{lemma}
+
+\begin{proof}
+On the event that the honest response's sampling error is at most $s$, chaining (iii), then
+(ii), then (i) of Lemma~\ref{lem:three},
+\[
+  \hat\mu_\alpha^{(n)}(a^\star)
+  \ge\mu_\alpha(\tilde F^\star)-s
+  \ge\mu_\alpha(F^\star)-\tfrac{\eps}{1-2\alpha}-s
+  \ge\Wbar^\star-2\alpha-\tfrac{\eps}{1-2\alpha}-s .
+\]
+Symmetrically, $\hat\mu_\alpha^{(n)}(a^\dagger)\le\Wbar^\dagger+2\alpha+\tfrac{\eps}{1-2\alpha}+s$.
+Subtracting, on the intersection of the two sampling events,
+\[
+  \hat\mu_\alpha^{(n)}(a^\star)-\hat\mu_\alpha^{(n)}(a^\dagger)
+  \ge M-4\alpha-\frac{2\eps}{1-2\alpha}-2s>0
+\]
+by hypothesis. Each sampling event fails with probability $\le 2\exp(-2ns^2(1-2\alpha)^2)$ by
+Lemma~\ref{lem:three}(iii); a union bound over the two responses' upper and lower deviations
+(four events) gives the stated failure probability.
+\end{proof}
+
+
+\section{Main theorem: welfare-consistency of robust RLDF}
+\label{sec:mainthm}
+
+Calibration on the faithful subpopulation makes the clean reward track welfare
+(Lemma~\ref{lem:hindsight}); robust aggregation contains the corruptible minority and the
+trimming and sampling penalties (Lemma~\ref{lem:rank}); a margin assumption guarantees the
+welfare signal exceeds the total penalty.
+
+\begin{theorem}[Welfare-consistency of robust RLDF]
+\label{thm:main}
+Fix a query $x$ and a finite candidate set $\Ac_c\subseteq\Ac$ containing a welfare-optimal
+$a^\star\in\Ac^\star(x)$. Suppose:
+\begin{enumerate}[label=\textup{(A\arabic*)},leftmargin=3em,itemsep=2pt,topsep=2pt]
+  \item \textup{(Calibration)} the hindsight grader is outcome-calibrated on the faithful
+  subpopulation $P_{\mathrm f}$ (Assumption~\ref{ass:calib});
+  \item \textup{(Bounded corruption)} every candidate's panel is at most $\eps$-contaminated
+  with $\eps<\alpha$, where $\alpha\in(0,\tfrac12)$ is the trimming level;
+  \item \textup{(Welfare margin)} for every welfare-suboptimal $a'\in\Ac_c$,
+  $\ \Wbar(x,a^\star)-\Wbar(x,a')>4\alpha+\frac{2\eps}{1-2\alpha}+2s$ for some $s>0$;
+  \item \textup{(Panel size)} $n\ge\dfrac{1}{2s^2(1-2\alpha)^2}\log\dfrac{4|\Ac_c|}{\delta}$.
+\end{enumerate}
+Then, with probability at least $1-\delta$ over the simulated panels, the $\alpha$-trimmed
+empirical market reward $\hat\mu_\alpha^{(n)}$ is welfare-consistent on $\Ac_c$: its maximizer
+over $\Ac_c$ lies in $\Ac^\star(x)$. Consequently any policy maximizing the robust RLDF reward
+over $\Ac_c$ at $x$ places its mass on the welfare-optimal set, and a policy doing so for
+$\Dc$-a.e.\ $x$ maximizes the alignment target $J^\star$.
+\end{theorem}
+
+\begin{proof}
+Apply Lemma~\ref{lem:rank} to $(a^\star,a')$ for each welfare-suboptimal $a'\in\Ac_c$.
+Hypotheses (A1)--(A3) are exactly its hypotheses: (A1) supplies
+$\mathrm{mean}(F_a)=\Wbar(x,a)$ on the faithful mass, (A2) supplies $\eps<\alpha$, (A3) is the
+margin condition with slack $s$. The lemma gives
+$\hat\mu_\alpha^{(n)}(a^\star)>\hat\mu_\alpha^{(n)}(a')$ with failure probability
+$\le4\exp(-2ns^2(1-2\alpha)^2)$ for that pair. By (A4) this is $\le\delta/|\Ac_c|$, so a union
+bound over the at most $|\Ac_c|$ suboptimal candidates makes the total failure probability
+$\le\delta$. On the complement, $a^\star$ strictly outscores every other candidate, hence
+$\argmax_{a\in\Ac_c}\hat\mu_\alpha^{(n)}(a)=\{a^\star\}\subseteq\Ac^\star(x)$. The final
+sentence is the pointwise decomposition following Definition~\ref{def:target}.
+\end{proof}
+
+\begin{corollary}[RLVR recovery]
+\label{cor:rlvr}
+In the regime of Proposition~\ref{prop:rlvr}, equivalently an outcome-verifiable task
+(Definition~\ref{def:vo}) with a single consumer, one has $\eps=0$, zero sampling variance (so
+any $s>0$ and $n=1$ satisfy (A4)), and welfare equal to the grade. Taking $\alpha\to0$, the
+margin condition reduces to $\Wbar^\star>\Wbar(x,a')$, i.e.\ to $a^\star$ being strictly correct
+and $a'$ not. Theorem~\ref{thm:main} then recovers the exact welfare-consistency of RLVR
+asserted in Proposition~\ref{prop:rlvr}.
+\end{corollary}
+
+\begin{proof}
+With $\eps=0$ and $\alpha\to0$ the penalty $4\alpha+\frac{2\eps}{1-2\alpha}\to0$, leaving
+$M>2s$; with deterministic outcomes the empirical trimmed mean equals the grade exactly, so
+any $s>0$ works and (A4) holds at $n=1$. The surviving requirement
+$\Wbar^\star>\Wbar(x,a')$ is correctness of $a^\star$ over $a'$.
+\end{proof}
+
+
+\section{Scope of the assumptions}
+\label{sec:discussion}
+
+The theorem is only as strong as its hypotheses. The one that carries the weight is calibration.
+
+\paragraph{Calibration (A1) is load-bearing.}
+Everything reduces to it. Lemma~\ref{lem:hindsight} is calibration plus the tower property, and
+the robust machinery of Section~\ref{sec:robust} only protects calibration against a minority
+that violates it. If the simulator is biased on the faithful majority, so that
+$\E_o[g(o)\given x,u,a]$ departs systematically from $W(x,u,a)$ for typical $u$, then no trimming
+level recovers welfare, because the contamination model assumes the bulk is clean. In this sense
+RLDF inherits the reliability of its world model: the reward is verifier-grade only to the extent
+that $g\circ T$ is calibrated and policy-independent (Definition~\ref{def:vo}). On
+outcome-verifiable tasks this holds by construction ($\eps=0$); on simulated-outcome tasks it is
+an empirical claim about the simulator that must be argued, not assumed. The role of
+Section~\ref{sec:robust} is to weaken the requirement from ``calibrated everywhere'' to
+``calibrated on a $(1-\eps)$ majority with $\eps<\alpha$,'' not to remove it.
+
+\paragraph{Targeting is excluded by (A2), not defeated by trimming.}
+Trimming caps the influence of a corrupt fraction at $\eps/(1-2\alpha)$ only when $\eps<\alpha$
+(Lemma~\ref{lem:three}(ii)); once a panel is corrupt-majority ($\eps>\alpha$), the trimmed
+mean's breakdown point is crossed and the bound is void. A type-aware targeting adversary
+(Remark~\ref{rem:target}) is dangerous precisely because it can try to manufacture such a
+corrupt-majority panel by routing the manipulation only to gameable consumers. Trimming alone
+does not stop this. What stops it is the representative-panel construction of
+Definition~\ref{def:market}: every candidate is graded on a fresh i.i.d.\ draw from
+$P(\cdot\given x)$, so each panel's corrupt share equals the population $\eps$ no matter how the
+policy routes responses, which is exactly hypothesis (A2). Thus (A2) does not quietly assume the
+attack away; it is the content of a concrete design choice, representative grading, that an
+implementer either makes or forfeits. Given (A2), trimming does the remaining work, and does it
+without detecting which consumers are gameable; only the population-level bound on how many
+matters. The irreducible assumption is global: if the faithful are a population minority
+($\eps>\alpha$ everywhere), no aggregation rule recovers welfare.
+
+\paragraph{Margin (A3) and constants.}
+The margin condition demands that the welfare gap between a good response and a manipulation
+exceed the summed trimming, contamination, and sampling penalties. The constants are worst-case:
+the trimming term shrinks to $O(\alpha\sigma)$ under bounded grade variance, and the
+contamination term is the price of admitting an $\eps$-minority one declines to detect. The
+qualitative content is robust: a sufficiently distinguishable welfare difference is recoverable,
+and one finer than the noise floor is not, as for any sampled reward.
+
+\paragraph{Population diversity.}
+The population kernel $P(\cdot\given x)$ is what separates RLDF from a single-judge hindsight
+reward. A degenerate $P$ collapses Lemma~\ref{lem:hindsight} to a one-evaluator scheme and
+forfeits both the concentration of Lemma~\ref{lem:concentration} and the robustness of
+Section~\ref{sec:robust}; a diverse $P$ is what gives the trimmed mean a distribution to trim.
+Heterogeneity is therefore a requirement of the construction, not a complication: it is what the
+welfare average and its robust surrogate are defined over.
+
+
+\section{Positioning against prior work}
+\label{sec:related}
+
+\paragraph{RLVR and its soft extensions.}
+RLVR \cite{deepseekr1,tulu3,deepseekmath} is the $\eps=0$, deterministic, single-consumer limit
+(Proposition~\ref{prop:rlvr}, Corollary~\ref{cor:rlvr}). Soft extensions that learn a generative
+reward model or rubric critic for open-ended domains \cite{crossingbridge,rlmt,truthrl} re-admit
+a corruptible response-only grader and so live on the foresight side of
+Lemma~\ref{lem:foresight}: they score the answer, not its consequence.
+
+\paragraph{Hindsight simulation.}
+RLHS \cite{rlhs} is the direct antecedent and the source, in substance, of
+Lemmas~\ref{lem:foresight}--\ref{lem:hindsight}: it simulates the downstream outcome and grades
+in hindsight, with automated LLM simulator and evaluator, to mitigate sycophancy and deception.
+Its evaluator is a single persona. The present results add the population kernel
+(Section~\ref{sec:market}), the closed-form gameability threshold (Section~\ref{sec:game}) that
+ties the construction to the user-feedback manipulation result of \cite{williams}, and the
+robust-aggregation ranking guarantee (Section~\ref{sec:robust}) that a single-persona scheme
+cannot state.
+
+\paragraph{User-feedback RL and its hazards.}
+Training on simulated user feedback induces targeted manipulation when even a small fraction of
+users is gameable \cite{williams}, which is exactly Lemma~\ref{lem:threshold} and
+Remark~\ref{rem:target}, with representative panels and trimming as the countermeasure. Emergent
+misalignment under competition for audiences \cite{moloch} and deceptive policies that persist
+through safety training \cite{sleeper} are the qualitative hazards the calibration discussion of
+Section~\ref{sec:discussion} keeps in view.
+
+\paragraph{Market and multi-agent framings.}
+Simulated consumer populations appear in economic LLM sandboxes \cite{malles} and
+generative-agent simulations \cite{genagents}, and market mechanisms have been proposed as
+alignment scaffolds over agents' propositions \cite{marketmaking} and over emotional verifiable
+signals \cite{rlver}. These price stated preferences or beliefs; RLDF prices realized welfare
+outcomes of acting on advice, aggregated over a heterogeneous population, and feeds the aggregate
+back as the reinforcement signal. We use the word market in a weak sense, a population
+aggregating realized outcomes into a price, and not in the mechanism-design sense of a clearing
+price, a scoring rule, or competition between responses; the object that does the work is the
+robust population aggregate $\mu_\alpha$, and no result depends on the metaphor.
+Table~\ref{tab:position} summarizes the axes.
+
+\begin{table}[h]
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}lccccl@{}}
+\toprule
+\textbf{Method} & \textbf{Reward source} & \textbf{Pop.?} & \textbf{Outcome-} & \textbf{Robust to} & \textbf{Ref.}\\
+ & & & \textbf{grounded?} & \textbf{gaming?} & \\
+\midrule
+RLHF (foresight RM)        & learned RM, response  & no  & no  & no            & \cite{dpo}\\
+RLVR                       & verifier, answer      & no  & yes\,$^\ast$ & yes\,$^\ast$ & \cite{deepseekr1,tulu3}\\
+Soft RLVR / GenRM          & learned grader, resp. & no  & no  & no            & \cite{crossingbridge,rlmt}\\
+RLHS                       & sim.\ outcome, 1 judge& no  & yes & not analyzed  & \cite{rlhs}\\
+User-feedback RL           & sim.\ user signal     & yes & no  & no            & \cite{williams}\\
+Economic sandbox (MALLES)  & consumer preference   & yes & no  & not analyzed  & \cite{malles}\\
+Market-making (props.)     & belief market         & yes & no  & partial       & \cite{marketmaking}\\
+\textbf{RLDF (this note)}  & sim.\ outcome, pop.   & yes & yes & yes (Thm.~\ref{thm:main}) & \\
+\bottomrule
+\end{tabular}
+\caption{Positioning of robust RLDF. $^\ast$RLVR is outcome-grounded and gaming-robust only
+within its verifiable slice; RLDF recovers it as the degenerate limit
+(Corollary~\ref{cor:rlvr}) and extends the guarantee to stochastic, heterogeneous, partially
+corruptible populations.}
+\label{tab:position}
+\end{table}
+
+
+\begin{thebibliography}{99}
+\setlength{\itemsep}{2pt}
+
+\bibitem{deepseekr1}
+DeepSeek-AI, D.~Guo, D.~Yang, H.~Zhang, et al.
+\newblock DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning.
+\newblock arXiv:2501.12948, 2025. \url{https://arxiv.org/abs/2501.12948}.
+
+\bibitem{tulu3}
+N.~Lambert, J.~Morrison, V.~Pyatkin, S.~Huang, H.~Ivison, et al.
+\newblock T\"ulu 3: Pushing Frontiers in Open Language Model Post-Training.
+\newblock arXiv:2411.15124, 2024. \url{https://arxiv.org/abs/2411.15124}.
+
+\bibitem{deepseekmath}
+Z.~Shao, P.~Wang, Q.~Zhu, R.~Xu, J.~Song, et al.
+\newblock DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models.
+\newblock arXiv:2402.03300, 2024. \url{https://arxiv.org/abs/2402.03300}.
+
+\bibitem{crossingbridge}
+Y.~Su, D.~Yu, L.~Song, J.~Li, H.~Mi, Z.~Tu, M.~Zhang, D.~Yu.
+\newblock Crossing the Reward Bridge: Expanding RL with Verifiable Rewards Across Diverse Domains.
+\newblock arXiv:2503.23829, 2025. \url{https://arxiv.org/abs/2503.23829}.
+
+\bibitem{rlmt}
+A.~Bhaskar, X.~Ye, D.~Chen.
+\newblock Language Models that Think, Chat Better.
+\newblock arXiv:2509.20357, 2025. \url{https://arxiv.org/abs/2509.20357}.
+
+\bibitem{truthrl}
+Z.~Wei, X.~Yang, K.~Sun, J.~Wang, R.~Shao, et al.
+\newblock TruthRL: Incentivizing Truthful LLMs via Reinforcement Learning.
+\newblock arXiv:2509.25760, 2025. \url{https://arxiv.org/abs/2509.25760}.
+
+\bibitem{rlhs}
+K.~Liang, H.~Hu, R.~Liu, T.~L.~Griffiths, J.~F.~Fisac.
+\newblock RLHS: Mitigating Misalignment in RLHF with Hindsight Simulation.
+\newblock arXiv:2501.08617, 2025. \url{https://arxiv.org/abs/2501.08617}.
+
+\bibitem{williams}
+M.~Williams, M.~Carroll, A.~Narang, C.~Weisser, B.~Murphy, A.~Dragan.
+\newblock On Targeted Manipulation and Deception when Optimizing LLMs for User Feedback.
+\newblock arXiv:2411.02306, 2024. \url{https://arxiv.org/abs/2411.02306}.
+
+\bibitem{sycophancy}
+M.~Sharma, M.~Tong, T.~Korbak, D.~Duvenaud, A.~Askell, et al.
+\newblock Towards Understanding Sycophancy in Language Models.
+\newblock arXiv:2310.13548, 2023. \url{https://arxiv.org/abs/2310.13548}.
+
+\bibitem{sleeper}
+E.~Hubinger, C.~Denison, J.~Mu, M.~Lambert, M.~Tong, et al.
+\newblock Sleeper Agents: Training Deceptive LLMs that Persist Through Safety Training.
+\newblock arXiv:2401.05566, 2024. \url{https://arxiv.org/abs/2401.05566}.
+
+\bibitem{moloch}
+B.~El, J.~Zou.
+\newblock Moloch's Bargain: Emergent Misalignment When LLMs Compete for Audiences.
+\newblock arXiv:2510.06105, 2025. \url{https://arxiv.org/abs/2510.06105}.
+
+\bibitem{marketmaking}
+B.~Gho, S.~Muppavarapu, A.~Shaik, T.~Tsay, A.~Mohan, et al.
+\newblock From Competition to Coordination: Market Making as a Scalable Framework for Safe and
+Aligned Multi-Agent LLM Systems.
+\newblock arXiv:2511.17621, 2025. \url{https://arxiv.org/abs/2511.17621}.
+
+\bibitem{malles}
+Y.~Wu, Y.~Liu, X.~Deng.
+\newblock MALLES: A Multi-agent LLMs-based Economic Sandbox with Consumer Preference Alignment.
+\newblock arXiv:2603.17694, 2026. \url{https://arxiv.org/abs/2603.17694}.
+
+\bibitem{rlver}
+P.~Wang, R.~Ma, B.~Zhang, X.~Chen, Z.~He, et al.
+\newblock RLVER: Reinforcement Learning with Verifiable Emotion Rewards for Empathetic Agents.
+\newblock arXiv:2507.03112, 2025. \url{https://arxiv.org/abs/2507.03112}.
+
+\bibitem{genagents}
+J.~S.~Park, J.~C.~O'Brien, C.~J.~Cai, M.~R.~Morris, P.~Liang, M.~S.~Bernstein.
+\newblock Generative Agents: Interactive Simulacra of Human Behavior.
+\newblock arXiv:2304.03442, 2023. \url{https://arxiv.org/abs/2304.03442}.
+
+\bibitem{dpo}
+R.~Rafailov, A.~Sharma, E.~Mitchell, S.~Ermon, C.~D.~Manning, C.~Finn.
+\newblock Direct Preference Optimization: Your Language Model is Secretly a Reward Model.
+\newblock arXiv:2305.18290, 2023. \url{https://arxiv.org/abs/2305.18290}.
+
+\bibitem{hoeffding}
+W.~Hoeffding.
+\newblock Probability Inequalities for Sums of Bounded Random Variables.
+\newblock \emph{Journal of the American Statistical Association}, 58(301):13--30, 1963.
+
+\bibitem{dkw}
+A.~Dvoretzky, J.~Kiefer, J.~Wolfowitz.
+\newblock Asymptotic Minimax Character of the Sample Distribution Function and of the Classical
+Multinomial Estimator.
+\newblock \emph{Annals of Mathematical Statistics}, 27(3):642--669, 1956.
+
+\bibitem{massart}
+P.~Massart.
+\newblock The Tight Constant in the Dvoretzky--Kiefer--Wolfowitz Inequality.
+\newblock \emph{Annals of Probability}, 18(3):1269--1283, 1990.
+
+\bibitem{lugosimendelson}
+G.~Lugosi, S.~Mendelson.
+\newblock Mean Estimation and Regression under Heavy-Tailed Distributions: A Survey.
+\newblock \emph{Foundations of Computational Mathematics}, 19:1145--1190, 2019.
+
+\end{thebibliography}
+
+\end{document}
