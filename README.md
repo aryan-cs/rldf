@@ -202,4 +202,6 @@ A preprint will follow the empirical results. For now, please cite the repositor
 
 ## License
 
-To be determined. Until a license file is added, treat the contents as all rights reserved, with permission granted only for reading and academic discussion. A permissive license will be added before any code is published.
+Copyright © 2026 Aryan Gupta. All rights reserved.
+
+This work is released under a proprietary license; see [`LICENSE`](LICENSE) for the full terms. You may read the work and cite it with attribution. You may not copy, redistribute, modify, create derivative works from, or make any commercial use of it, in whole or in part, without prior written permission. For permissions, contact aryan.cs.app@gmail.com.
