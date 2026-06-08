@@ -191,7 +191,7 @@ A preprint will follow the empirical results. For now, please cite the repositor
 
 ```
 @misc{rldf2026,
-  title  = {Reinforcement Learning from Downstream Feedback},
+  title  = {Reinforcement Learning from Downstream Feedback: Training Language Models on the Consequences of Their Answers},
   author = {Aryan Gupta},
   year   = {2026},
   note   = {\url{https://github.com/aryan-cs/rldf}}
