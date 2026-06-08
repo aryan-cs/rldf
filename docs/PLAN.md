@@ -117,11 +117,10 @@ calibration, which the theory identifies as the critical assumption.
 
 ### 5.1 Models and optimizer
 
-The trained policy is an open instruction model in the 7 to 8 billion parameter range
-(Qwen-2.5-7B-Instruct is the working choice). The world model and outcome evaluator are a larger
-open model (a 70 billion parameter class model), matching the RLHS simulator setup so that the
-single-judge versus population comparison is clean. The optimizer is GRPO, which keeps the
-implementation aligned with the policy-gradient setting of the theory.
+The trained policy is an open instruction model. The world model and outcome evaluator are a
+larger open model, matching the RLHS simulator setup so that the single-judge versus population
+comparison is clean. The optimizer is GRPO, which keeps the implementation aligned with the
+policy-gradient setting of the theory.
 
 ### 5.2 Tasks
 
@@ -203,30 +202,10 @@ The project succeeds if, on the same base model and optimizer:
   regime, hold out the world model from the policy, and track the gold-versus-proxy gap.
 - **Spurious gains.** RLVR-style gains can be format or memorization artifacts. Mitigation:
   adversarial probe sets and held-out tasks designed so that a shortcut does not transfer.
-- **Compute.** Population simulation multiplies inference cost by the panel size. Mitigation:
-  small panels suffice by the concentration bound; cache and reuse consumer rollouts; restrict the
-  large simulator to the simulated regime.
 
 ---
 
-## 8. Work plan
-
-1. **Verifiable-regime pilot.** Build the three verifiable tasks and their programs, train RLDF
-   and the baselines, and run the adversarial probe. This leg validates the policy-independence
-   claim and is buildable first because its failure modes are inherited from RLVR.
-2. **Simulator and population.** Build the consumer population and the world model and evaluator,
-   calibrate them on the verifiable tasks, and run the aggregation, population, panel, and signal
-   ablations.
-3. **Simulated-regime head-to-head.** Train RLDF against RLHS on the shared consultancy tasks and
-   run the gameability stress test.
-4. **Write-up.** Theory is complete in `proof.pdf`; the paper pairs it with the empirical results.
-
-Phase 2 and 3 are contingent on Phase 1 showing the verifiable signal is meaningfully harder to
-game than a judge.
-
----
-
-## 9. Open problems
+## 8. Open problems
 
 - Whether the robust guarantee, which is for unstructured corruption below the breakdown point,
   can be extended to a policy that games the simulator itself rather than a consumer minority.
@@ -237,7 +216,7 @@ game than a judge.
 
 ---
 
-## 10. Positioning
+## 9. Positioning
 
 RLDF extends RLVR along three axes RLVR holds fixed: a heterogeneous population, a stochastic
 outcome, and an imperfect grader. Against RLHS, it replaces a single hindsight judge with a robust

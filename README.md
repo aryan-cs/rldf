@@ -134,7 +134,7 @@ rldf/
 In order:
 
 1. **[README.md](README.md)** *(this file)*. Orientation.
-2. **[PLAN.md](docs/PLAN.md)**. The research plan: thesis, the two task regimes, baselines and ablations, the gameability stress test, success and falsification criteria, work phases, and open problems.
+2. **[PLAN.md](docs/PLAN.md)**. The research plan: thesis, the two task regimes, baselines and ablations, the gameability stress test, success and falsification criteria, and open problems.
 3. **[proof.pdf](https://aryan-cs.github.io/rldf/proof.pdf)**. The formal theory. The foresight-hindsight gap, finite-population concentration, the gameability threshold, the robust-aggregation ranking guarantee and main theorem, then the extensions: approximate calibration, training-loop regret, and the per-distribution bound with its sharpness result.
 
 If you read two sections of the proof, read the main theorem (welfare-consistency of robust RLDF) and the section on the gameability threshold.
