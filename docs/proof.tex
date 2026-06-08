@@ -45,8 +45,7 @@
 \DeclareMathOperator{\supp}{supp}
 \newcommand{\defeq}{\vcentcolon=}
 
-\title{\textbf{Reinforcement Learning from Downstream Feedback:\\[2pt]
-A Welfare-Consistency Theorem for\\ Consequence-Graded Policy Optimization}}
+\title{\textbf{Reinforcement Learning from Downstream Feedback}}
 \author{Aryan Gupta\\[2pt]\small\texttt{aryan.cs.app@gmail.com}}
 \date{June 2026}
 
@@ -308,7 +307,7 @@ $a_2\in\argmax\{r_F(x,a_1),r_F(x,a_2)\}$ with $a_2\notin\Ac^\star(x)$.
 \end{proof}
 
 \begin{remark}
-The lemma is an existence statement, and intentionally so. Response-sensitivity of $B$ does not
+The lemma is an existence statement. Response-sensitivity of $B$ does not
 by itself reorder the $\argmax$: a bias that varies in $a$ but never overtakes the welfare gap
 leaves the optimum intact. The assumption is that the overtaking case occurs, which is what the
 sycophancy literature reports, and one instance is enough to deny welfare-consistency.
@@ -387,7 +386,7 @@ sample-size statement.
 
 Two of the three degeneracies of Proposition~\ref{prop:rlvr} are now lifted, the population
 being a genuine distribution and the world stochastic, and the reward still tracks welfare. The
-third, an incorruptible grader, is the subject of the next section, and removing it is the real
+third, an incorruptible grader, is the subject of the next section and is the principal
 difficulty.
 
 
@@ -554,8 +553,8 @@ The Dvoretzky--Kiefer--Wolfowitz inequality with Massart's tight constant \cite{
 gives $\Prob(\|F_n-F\|_\infty>\eta)\le 2e^{-2n\eta^2}$; set $\eta=s(1-2\alpha)$.
 \end{proof}
 
-\begin{remark}[The estimand shift is real]
-Part (i) is not slack to be optimized away: even with a perfectly calibrated, uncontaminated
+\begin{remark}[The estimand shift]
+Part (i) is not a bound that vanishes under optimization: even with a perfectly calibrated, uncontaminated
 grader, $\mu_\alpha(F_a)\ne\Wbar(x,a)$ in general, because trimming reshapes the distribution.
 Robust RLDF therefore does not estimate welfare; it estimates a trimmed surrogate. What survives
 is the comparison between responses, which is all a reward optimizer consumes. The constant
@@ -669,10 +668,9 @@ $\Wbar^\star>\Wbar(x,a')$ is correctness of $a^\star$ over $a'$.
 \label{sec:approxcalib}
 
 Theorem~\ref{thm:main} assumes the simulate-then-evaluate pipeline is \emph{exactly} unbiased for
-welfare on the faithful mass (Assumption~\ref{ass:calib}). Real graders are not exactly
-calibrated; learned reward models are in fact systematically overconfident
-\cite{rewardcalib}. We show the guarantee degrades gracefully and we pin down how much
-miscalibration it tolerates.
+welfare on the faithful mass (Assumption~\ref{ass:calib}). Learned reward models are systematically
+overconfident \cite{rewardcalib}, so this is too strong. We weaken it to approximate calibration
+and quantify the miscalibration the guarantee tolerates.
 
 \begin{assumption}[$\eta$-approximate calibration]
 \label{ass:approxcalib}
@@ -736,7 +734,7 @@ weakly preferred while being welfare-inferior.
 
 The results so far bound the reward at a fixed query and certify that its maximizer over a
 candidate set is welfare-optimal. We now lift this to the policy an optimizer actually returns,
-and isolate the part of the welfare gap that no amount of optimization removes.
+and isolate the component of the welfare gap that optimization cannot reduce.
 
 Let $\Pi$ be the policy class the optimizer searches (for instance the set reachable by the
 training algorithm from the base model). For $\pi\in\Pi$ write the true welfare value and the
@@ -887,9 +885,10 @@ sufficient condition of Theorem~\ref{thm:main}.
 \section{Scope of the assumptions}
 \label{sec:discussion}
 
-The theorem is only as strong as its hypotheses. The one that carries the weight is calibration.
+The theorem is only as strong as its hypotheses. The hypothesis on which the result depends is
+calibration.
 
-\paragraph{Calibration (A1) is load-bearing.}
+\paragraph{Calibration (A1) is the central hypothesis.}
 Everything reduces to it. Lemma~\ref{lem:hindsight} is calibration plus the tower property, and
 the robust machinery of Section~\ref{sec:robust} only protects calibration against a minority
 that violates it. If the simulator is biased on the faithful majority, so that
@@ -906,13 +905,13 @@ Section~\ref{sec:robust} is to weaken the requirement from ``calibrated everywhe
 Trimming caps the influence of a corrupt fraction at $\eps/(1-2\alpha)$ only when $\eps<\alpha$
 (Lemma~\ref{lem:three}(ii)); once a panel is corrupt-majority ($\eps>\alpha$), the trimmed
 mean's breakdown point is crossed and the bound is void. A type-aware targeting adversary
-(Remark~\ref{rem:target}) is dangerous precisely because it can try to manufacture such a
+(Remark~\ref{rem:target}) is dangerous because it can try to manufacture such a
 corrupt-majority panel by routing the manipulation only to gameable consumers. Trimming alone
 does not stop this. What stops it is the representative-panel construction of
 Definition~\ref{def:market}: every candidate is graded on a fresh i.i.d.\ draw from
 $P(\cdot\given x)$, so each panel's corrupt share equals the population $\eps$ no matter how the
-policy routes responses, which is exactly hypothesis (A2). Thus (A2) does not quietly assume the
-attack away; it is the content of a concrete design choice, representative grading, that an
+policy routes responses, which is exactly hypothesis (A2). Hence (A2) is not a tacit assumption that the attack does not
+occur; it is the content of a concrete design choice, representative grading, that an
 implementer either makes or forfeits. Given (A2), trimming does the remaining work, and does it
 without detecting which consumers are gameable; only the population-level bound on how many
 matters. The irreducible assumption is global: if the faithful are a population minority

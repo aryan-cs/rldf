@@ -10,7 +10,7 @@ This repository hosts the formal theory and the research plan for RLDF. The theo
 
 ## In simple terms
 
-The trick behind today's best reasoning models only works when an answer can be checked against a key, like a math result or code that either passes its tests or does not. Most real questions, like whether to take a job, have no key, so the trick does not apply.
+The trick behind today's best reasoning models only works when an answer can be checked against a key, like a math result or code that either passes its tests or does not. Most real questions, like whether to take a job, have no key, so that approach does not apply.
 
 RLDF judges the model by what happens next instead. It simulates a crowd of different people following the model's advice and rewards an answer by whether those people end up better off. An answer that only sounds good, by flattering the user or making something up, leads to bad outcomes once people act on it, so it scores low and the model learns to avoid it.
 
@@ -30,7 +30,7 @@ If the thesis holds:
 
 1. **Verifiability extends to a new layer.** For a large class of advisory tasks the outcome of acting on a response is mechanically scorable even when the response is open-ended natural language. A code change is free-form text, but whether it passes the test suite is a fixed, policy-independent check. On such tasks RLDF inherits RLVR-grade robustness where response-grading methods do not.
 2. **Sycophancy and hallucination are penalized at the source.** A flattering or confidently wrong answer wins approval but loses on the outcome a consumer realizes. Grading the outcome removes the persuasion bias that response-grading rewards.
-3. **The gameability failure has a defense with a proof.** Optimizing against simulated users is the exact procedure shown to manufacture targeted manipulation of a vulnerable minority. RLDF answers it structurally, with a robust aggregator and representative panels, and the defense comes with a welfare-consistency guarantee and a sharp threshold.
+3. **The gameability failure is met with a guarantee.** Optimizing against simulated users is the procedure shown to manufacture targeted manipulation of a vulnerable minority. RLDF answers it with a robust aggregator and representative panels, and the guarantee is a welfare-consistency theorem with a sharp contamination threshold.
 
 The work sits at the intersection of three lines that each reach part of the target:
 
@@ -38,13 +38,13 @@ The work sits at the intersection of three lines that each reach part of the tar
 - **Economic and agent-society sandboxes.** MALLES (arXiv:2603.17694) and AgentSociety (arXiv:2502.08691) build heterogeneous populations, but the LLMs are the consumers and the signal is a stated preference; no advisor is trained.
 - **Outcome-rewarded agents.** WebRL (arXiv:2411.02337) trains a policy on a realized outcome, but collapses it to a single success bit.
 
-> **On the threat model.** Williams and Carroll (arXiv:2411.02306) show that optimizing against simulated user feedback makes a model learn to identify and manipulate even a 2% vulnerable minority while behaving correctly for everyone else. This is the central hazard, not a citation. The proof treats it directly: trimming bounds an unstructured minority, and representative panels are what stop a targeting adversary, with sharpness shown at the breakdown point.
+> **On the threat model.** Williams and Carroll (arXiv:2411.02306) show that optimizing against simulated user feedback makes a model learn to identify and manipulate even a 2% vulnerable minority while behaving correctly for everyone else. This is the central hazard the method must survive. The proof treats it directly: trimming bounds an unstructured minority, and representative panels are what stop a targeting adversary, with sharpness shown at the breakdown point.
 
 The formal development is in [`proof.pdf`](https://aryan-cs.github.io/rldf/proof.pdf).
 
 ---
 
-## The loop in 30 seconds
+## The training loop
 
 ```mermaid
 flowchart LR
@@ -76,7 +76,7 @@ flowchart LR
 | **World model** | Simulates the outcome of each consumer acting on the response. |
 | **Outcome grader** | Scores the realized outcome by welfare or regret, not the response text. |
 | **Robust aggregate** | Combines the panel grades with an alpha-trimmed mean, discarding the extremes so a corruptible minority cannot move the price. |
-| **Optimizer** (GRPO) | Ascends the robust reward, exactly as RLVR ascends a verifier score. |
+| **Optimizer** (GRPO) | Ascends the robust reward, as RLVR ascends a verifier score. |
 
 The corruption parameter is zero when the world model and grader are a fixed program (the verifiable regime) and positive when they are a learned model (the simulated regime). The robust aggregator and the representative panel do, in the simulated regime, the work that policy-independence does for free in the verifiable regime.
 
@@ -133,7 +133,7 @@ rldf/
 
 In order:
 
-1. **[README.md](README.md)** *(this file)*. Five-minute orientation.
+1. **[README.md](README.md)** *(this file)*. Orientation.
 2. **[PLAN.md](docs/PLAN.md)**. The research plan: thesis, the two task regimes, baselines and ablations, the gameability stress test, success and falsification criteria, work phases, and open problems.
 3. **[proof.pdf](https://aryan-cs.github.io/rldf/proof.pdf)**. The formal theory. The foresight-hindsight gap, finite-population concentration, the gameability threshold, the robust-aggregation ranking guarantee and main theorem, then the extensions: approximate calibration, training-loop regret, and the per-distribution bound with its sharpness result.
 
@@ -179,9 +179,9 @@ cd docs && latexmk -pdf proof.tex
 
 ## A note on framing
 
-RLDF makes a claim about what is graded, not about scale. The reward is verifiable-grade only where the outcome pipeline is policy-independent; elsewhere it inherits the reliability of its world model, and the theory says so plainly: calibration on the faithful majority is the load-bearing assumption, and no aggregator recovers welfare if it fails. The robust aggregator weakens that requirement from calibrated everywhere to calibrated on a majority, and no further.
+RLDF makes a claim about what is graded, not about scale. The reward is verifiable-grade only where the outcome pipeline is policy-independent; elsewhere it inherits the reliability of its world model: calibration on the faithful majority is the assumption everything rests on, and no aggregator recovers welfare if it fails. The robust aggregator weakens that requirement from calibrated everywhere to calibrated on a majority, and no further.
 
-If you are a reviewer or collaborator, the right places to push back are: the calibration assumption and whether a simulator can meet it; whether the verifiable regime is genuinely harder to game than a judge; and whether realized-welfare grading reduces hallucination as well as sycophancy. The experiments that would settle these have not yet been run.
+If you are a reviewer or collaborator, the right places to push back are: the calibration assumption and whether a simulator can meet it; whether the verifiable regime is harder to game than a judge; and whether realized-welfare grading reduces hallucination as well as sycophancy. The experiments that would settle these have not yet been run.
 
 ---
 
@@ -191,7 +191,7 @@ A preprint will follow the empirical results. For now, please cite the repositor
 
 ```
 @misc{rldf2026,
-  title  = {Reinforcement Learning from Downstream Feedback: A Welfare-Consistency Theorem for Consequence-Graded Policy Optimization},
+  title  = {Reinforcement Learning from Downstream Feedback},
   author = {Aryan Gupta},
   year   = {2026},
   note   = {\url{https://github.com/aryan-cs/rldf}}

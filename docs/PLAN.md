@@ -70,17 +70,18 @@ response, grade each realized outcome, and aggregate the grades with an alpha-tr
 trimming discards the most extreme grades so that a corruptible minority below the trimming level
 cannot move the price; the fresh independent panel ensures the corruptible share of every panel
 equals the population share, which is what blocks a policy from routing a manipulation only to
-gameable consumers. The aggregate is fed to a policy-gradient optimizer (GRPO), exactly as RLVR
-feeds a verifier score.
+gameable consumers. The aggregate is fed to a policy-gradient optimizer (GRPO), as RLVR feeds a
+verifier score.
 
 Two regimes sit on a spectrum set by whether the outcome pipeline is policy-independent.
 
 - **Outcome-verifiable tasks.** The outcome of acting on the response is produced by a fixed
-  executor and scored by a fixed program, so the grader is a genuine verifier and the corruption
-  parameter is zero. A code change graded by a test suite, a tool-use plan graded by a sandbox
-  post-state, a schedule graded by a constraint solver. Here RLDF inherits RLVR-grade guarantees.
+  executor and scored by a fixed program, so the grader is a verifier and the corruption
+  parameter is zero. Examples include a code change graded by a test suite, a tool-use plan graded
+  by a sandbox post-state, and a schedule graded by a constraint solver. Here RLDF inherits
+  RLVR-grade guarantees.
 - **Simulated-outcome tasks.** The outcome is produced by a learned world model and evaluator, so
-  the grader is a model and the corruption parameter is positive. Advice, explanation, and
+  the grader is a model and the corruption parameter is positive, as in advice, explanation, and
   open-ended recommendation. Here the robust aggregator and the representative panel do the work
   that policy-independence does for free in the verifiable regime.
 
@@ -108,7 +109,7 @@ The formal development is in [`proof.pdf`](proof.pdf). In brief:
   threshold is sharp at the breakdown point.
 
 The experimental programme is designed to test the assumptions these results rest on, above all
-calibration, which the theory identifies as load-bearing.
+calibration, which the theory identifies as the critical assumption.
 
 ---
 
@@ -119,9 +120,8 @@ calibration, which the theory identifies as load-bearing.
 The trained policy is an open instruction model in the 7 to 8 billion parameter range
 (Qwen-2.5-7B-Instruct is the working choice). The world model and outcome evaluator are a larger
 open model (a 70 billion parameter class model), matching the RLHS simulator setup so that the
-single-judge versus population comparison is clean. The optimizer is GRPO, so the robust aggregate
-slots into the same group-relative advantage RLVR uses, which keeps the theory and the
-implementation aligned.
+single-judge versus population comparison is clean. The optimizer is GRPO, which keeps the
+implementation aligned with the policy-gradient setting of the theory.
 
 ### 5.2 Tasks
 
@@ -190,13 +190,11 @@ The project succeeds if, on the same base model and optimizer:
    manipulation threshold tracks the predicted one. If trimming fails to defend or mean aggregation
    does not fail, the central robustness claim is wrong.
 
-Each criterion has a stated way to lose, which is the point.
-
 ---
 
 ## 7. Risks and mitigations
 
-- **Calibration is the load-bearing assumption.** If the simulator is biased on the faithful
+- **Calibration is the assumption the guarantee rests on.** If the simulator is biased on the faithful
   majority, no aggregator recovers welfare. Mitigation: measure simulator calibration directly
   against held-out human or programmatic outcomes on the verifiable tasks, where ground truth
   exists, and report the calibration error the approximate-calibration theorem consumes.
@@ -242,11 +240,11 @@ game than a judge.
 ## 10. Positioning
 
 RLDF extends RLVR along three axes RLVR holds fixed: a heterogeneous population, a stochastic
-outcome, and an imperfect grader. It extends RLHS from a single hindsight judge to a robust
-population aggregate over realized outcomes. It differs from the economic sandboxes by training the
-advisor rather than the consumers, and from the outcome-rewarded agents by aggregating a population
-welfare rather than a single success bit. The robust aggregator is borrowed intact from
-Byzantine-robust learning, and the reward-as-regret-of-acting is decision-focused learning carried
-into RLHF; the novelty is the join of these into a population-outcome training objective with a
-welfare-consistency guarantee and a sharp robustness threshold. The intended venue is a top machine
-learning conference.
+outcome, and an imperfect grader. Against RLHS, it replaces a single hindsight judge with a robust
+population aggregate over realized outcomes. Against the economic sandboxes, it trains the advisor
+rather than the consumers; against the outcome-rewarded agents, it aggregates population welfare
+rather than a single success bit. The robust aggregator is borrowed intact from Byzantine-robust
+learning, and the reward-as-regret-of-acting is decision-focused learning carried into RLHF; the
+novelty is the join of these into a population-outcome training objective with a welfare-consistency
+guarantee and a sharp robustness threshold. Intended venue: a machine learning conference such as
+NeurIPS, ICML, or ICLR.
